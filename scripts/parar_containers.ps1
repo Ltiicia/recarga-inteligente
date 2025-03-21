@@ -9,4 +9,4 @@ Write-Host "Containeres parados e removidos com sucesso!" -ForegroundColor Green
 docker ps
 
 #Para rodar, acessar o dir do projeto:
-#.\scripts\parar-containers.ps1
+#.\scripts\parar_containers.ps1

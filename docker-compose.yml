@@ -1,29 +1,36 @@
-version: '3.8'
-
 services:
   servidor:
-    build: ./servidor
+    build: 
+      context: .
+      dockerfile: cmd/servidor/Dockerfile
     container_name: servidor
+    command: ["./servidor"]
     ports:
       - "5000:5000" #http://localhost:5000
     networks:
       - recarga-inteligente-net
 
   veiculo:
-    build: ./veiculo
+    build:  
+      context: .
+      dockerfile: cmd/veiculo/Dockerfile
     container_name: veiculo
+    command: ["./veiculo"]
     ports:
-      -5001:5000 #http://localhost:5001
+      - 5001:5000 #http://localhost:5001
     depends_on:
       - servidor
     networks:
       - recarga-inteligente-net
   
   ponto-de-recarga:
-    build: ./ponto-de-recarga
+    build:  
+      context: .
+      dockerfile: cmd/ponto-de-recarga/Dockerfile
     container_name: ponto-de-recarga
+    command: ["./ponto-de-recarga"]
     ports:
-      -5002:5000 #http://localhost:5002
+      - 5002:5000 #http://localhost:5002
     depends_on:
       - servidor
     networks:
