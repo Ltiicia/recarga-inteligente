@@ -1,0 +1,31 @@
+{
+    "poligono": [
+        {"latitude": -12.1918297, "longitude": -39.0031042},
+        {"latitude": -12.3082487, "longitude": -39.0041342},
+        {"latitude": -12.3082487, "longitude": -38.8908389},
+        {"latitude": -12.1925008, "longitude": -38.8904956},
+        {"latitude": -12.1918297, "longitude": -39.0031042}
+    ],
+    "area":{
+        "latitude_max": -12.1918297,
+        "latitude_min": -12.3082487,
+        "longitude_min": -39.0031042,
+        "longitude_max": -38.8904956
+    },
+    "pontos-de-recarga":[
+        {"latitude": -12.2221771, "longitude": -38.9765559},
+        {"latitude": -12.2312366, "longitude": -38.9375887},
+        {"latitude": -12.2402957, "longitude": -38.9676295},
+        {"latitude": -12.2136207, "longitude": -38.9528666},
+        {"latitude": -12.24147, "longitude": -38.9535532},
+        {"latitude": -12.2441541, "longitude": -38.9470301},
+        {"latitude": -12.2528773, "longitude": -38.960763},
+        {"latitude": -12.2619357, "longitude": -38.9767275},
+        {"latitude": -12.2552258, "longitude": -38.9387904},
+        {"latitude": -12.2730882, "longitude": -38.9566705},
+        {"latitude": -12.2748495, "longitude": -38.9770982},
+        {"latitude": -12.2894872, "longitude": -38.9462683},
+        {"latitude": -12.2561807, "longitude": -38.908774},
+        {"latitude": -12.2840372, "longitude": -38.9181975}
+    ]
+}

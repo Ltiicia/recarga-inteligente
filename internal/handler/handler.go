@@ -3,27 +3,61 @@ package handler
 import (
 	"fmt"
 	"net"
+	"recarga-inteligente/internal/dataJson"
+	"recarga-inteligente/internal/logger"
+	"recarga-inteligente/internal/store"
 )
 
-func HandleConnection(conn net.Conn) {
-	defer conn.Close()
+// Trata a comunicacao com os clientes
+func HandleConnection(conexao net.Conn, connectionStore *store.ConnectionStore, logger *logger.Logger) {
+	defer connectionStore.RemoveConnection(conexao)
 
-	//Recebe e le os dados da conexao
-	buffer := make([]byte, 1024)
-	n, err := conn.Read(buffer)
-	if err != nil {
-		fmt.Printf("Erro ao ler dados: %v", err)
+	//recebe mensagem inicial
+	mensagemInicial, erro := dataJson.ReceiveMessage(conexao)
+	if erro != nil {
+		logger.Erro(fmt.Sprintf("Erro ao ler mensagem inicial do %s: %v", mensagemInicial.Origem, erro))
 		return
 	}
 
-	//Exibe a mensagem recebida
-	mensagem := string(buffer[:n])
-	fmt.Printf("Mensagem recebida: %s", mensagem)
-
-	//Responde
-	resposta := "Mensagem recebida com sucesso!"
-	_, err = conn.Write([]byte(resposta))
-	if err != nil {
-		fmt.Printf("Erro ao enviar resposta: %v", err)
+	tipoCliente := mensagemInicial.Origem
+	if tipoCliente != "veiculo" && tipoCliente != "ponto-de-recarga" {
+		logger.Erro(fmt.Sprintf("Origem desconhecida, encerrando conexao de: %s", tipoCliente))
+		conexao.Close()
+		return
 	}
+
+	connectionStore.AddConnection(conexao, tipoCliente)
+	logger.Info(fmt.Sprintf("Novo %s conectado: (%s)", tipoCliente, conexao.RemoteAddr()))
+
+	//Personaliza a resposta
+	var mensagemResposta dataJson.Mensagem
+	if tipoCliente == "veiculo" {
+		mensagemResposta = dataJson.Mensagem{
+			Tipo:     "get-localizacao",
+			Conteudo: "Ola Veiculo! Informe sua localizacao atual.",
+			Origem:   "servidor",
+		}
+	} else if tipoCliente == "ponto-de-recarga" {
+		mensagemResposta = dataJson.Mensagem{
+			Tipo:     "get-disponibilidade",
+			Conteudo: "Ola Ponto de Recarga! Informe sua disponibilidade.",
+			Origem:   "servidor",
+		}
+	}
+	//envia
+	erro = dataJson.SendMessage(conexao, mensagemResposta)
+	if erro != nil {
+		logger.Erro(fmt.Sprintf("Erro ao enviar saudacao ao %s: %v", tipoCliente, erro))
+		return
+	}
+	logger.Info(mensagemResposta.Conteudo)
+	for {
+		mensagemRecebida, erro := dataJson.ReceiveMessage(conexao)
+		if erro != nil {
+			logger.Erro(fmt.Sprintf("Erro ao ler mensagem do %s: %v", tipoCliente, erro))
+			return
+		}
+		logger.Info(fmt.Sprintf("Mensagem recebida do %s (%s) => %s", tipoCliente, conexao.RemoteAddr(), mensagemRecebida.Conteudo))
+	}
+	logger.Info(fmt.Sprintf("%s desconectado: %s", tipoCliente, conexao.RemoteAddr()))
 }

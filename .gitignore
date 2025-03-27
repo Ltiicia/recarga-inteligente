@@ -27,3 +27,4 @@ vendor/
 /go-build/
 /go/pkg/
 config.local.*
+*.ini

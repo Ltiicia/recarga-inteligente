@@ -1,33 +1,19 @@
 package main
 
 import (
-	"fmt"
-	"log"
-	"net"
-	"recarga-inteligente/internal/handler"
+	"os"
+	"recarga-inteligente/internal/logger"
+	"recarga-inteligente/internal/store"
+	"recarga-inteligente/internal/tcpIP"
 )
 
 func main() {
-	fmt.Println("Inicializando servidor")
+	logger := logger.NewLogger(os.Stdout)
+	connectionStore := store.NewConnectionStore()
 
-	//Inicializa o servidor na porta 5000
-	listener, err := net.Listen("tcp", ":5000")
-	if err != nil {
-		log.Fatalf("Erro ao iniciar servidor: %v", err)
-	}
-	defer listener.Close()
-
-	fmt.Println("Servidor escutando na porta 5000...")
-
-	//Aguarda conexoes
-	for {
-		conn, err := listener.Accept()
-		if err != nil {
-			fmt.Printf("Erro ao aceitar conexao: %v", err)
-			continue
-		}
-
-		//Trata a conexao em uma goroutine separada
-		go handler.HandleConnection(conn)
+	//Inicia o servidor TCP na porta 5000
+	erro := tcpIP.StartServerTCP(":5000", connectionStore, logger)
+	if erro != nil {
+		os.Exit(1)
 	}
 }

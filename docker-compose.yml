@@ -1,40 +1,36 @@
 services:
   servidor:
-    build: 
-      context: .
-      dockerfile: cmd/servidor/Dockerfile
-    container_name: servidor
-    command: ["./servidor"]
+    build: .
+    command: /app/servidor
     ports:
       - "5000:5000" #http://localhost:5000
     networks:
       - recarga-inteligente-net
 
   veiculo:
-    build:  
-      context: .
-      dockerfile: cmd/veiculo/Dockerfile
-    container_name: veiculo
-    command: ["./veiculo"]
-    ports:
-      - 5001:5000 #http://localhost:5001
+    build: .
+    command: /app/veiculo
     depends_on:
       - servidor
     networks:
       - recarga-inteligente-net
-  
+    environment:
+      - SERVIDOR_ADDR=servidor:5000
+    deploy:
+      replicas: 6
+
+
   ponto-de-recarga:
-    build:  
-      context: .
-      dockerfile: cmd/ponto-de-recarga/Dockerfile
-    container_name: ponto-de-recarga
-    command: ["./ponto-de-recarga"]
-    ports:
-      - 5002:5000 #http://localhost:5002
+    build: .
+    command: /app/ponto-de-recarga
     depends_on:
       - servidor
     networks:
       - recarga-inteligente-net
+    environment:
+      - SERVIDOR_ADDR=servidor:5000
+    deploy:
+      replicas: 3
 
 networks:
   recarga-inteligente-net:

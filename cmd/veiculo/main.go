@@ -2,34 +2,59 @@ package main
 
 import (
 	"fmt"
-	"log"
-	"net"
+	"os"
+	"recarga-inteligente/internal/coordenadas"
+	"recarga-inteligente/internal/dataJson"
+	"recarga-inteligente/internal/logger"
+	"recarga-inteligente/internal/tcpIP"
 )
 
 func main() {
-	fmt.Println("Inicializando veiculo...")
+	logger := logger.NewLogger(os.Stdout)
 
-	//Conecta ao servidor (fora do docker trocar servidor por localhost)
-	conn, err := net.Dial("tcp", "servidor:5000")
-	if err != nil {
-		log.Fatalf("Erro ao conectar ao servidor: %v\n", err)
+	conexao, erro := tcpIP.ConnectToServerTCP("servidor:5000")
+	if erro != nil {
+		os.Exit(1)
 	}
-	defer conn.Close()
+	logger.Info("Veiculo conectado")
+	defer conexao.Close()
 
-	//Envia uma mensagem para o servidor
-	mensagem := "Servidor, preciso de pontos de recarga"
-	_, err = conn.Write([]byte(mensagem))
-	if err != nil {
-		fmt.Printf("Erro ao enviar mensagem: %v\n", err)
+	var respostaServidor dataJson.Mensagem
+	respostaServidor, erro = tcpIP.SendIdentification(conexao, "veiculo")
+
+	if erro != nil {
+		logger.Erro(fmt.Sprintf("Erro ao obter resposta do servidor - %v", erro))
 		return
 	}
 
-	//Recebe a resposta do servidor
-	buffer := make([]byte, 1024)
-	n, err := conn.Read(buffer)
-	if err != nil {
-		log.Fatalf("Erro ao ler resposta: %v\n", err)
+	if respostaServidor.Tipo == "get-localizacao" {
+		var dadosRegiao dataJson.DadosRegiao
+		dadosRegiao, erro = dataJson.OpenFile("regiao.json")
+		if erro != nil {
+			logger.Erro(fmt.Sprintf("Erro ao obter dados da regiao - %v", erro))
+			return
+		}
+
+		localizacaoAtual := coordenadas.GetLocalizacaoVeiculo(dadosRegiao.Area)
+
+		msg := dataJson.Mensagem{
+			Tipo:     "localizacao",
+			Conteudo: fmt.Sprintf("Localizacao atual - Latitude: %f Longitude: %f", localizacaoAtual.Latitude, localizacaoAtual.Longitude),
+			Origem:   "veiculo",
+		}
+		erro := dataJson.SendMessage(conexao, msg)
+		if erro != nil {
+			logger.Erro(fmt.Sprintf("Erro ao enviar localizacao - %v", erro))
+		}
+		//logger.Info(msg.Conteudo)
 	}
 
-	fmt.Printf("Resposta do servidor: %s\n", string(buffer[:n]))
+	for {
+		mensagemRecebida, erro := dataJson.ReceiveMessage(conexao)
+		if erro != nil {
+			logger.Erro(fmt.Sprintf("Erro ao ler mensagem do servidor - %v", erro))
+			return
+		}
+		logger.Info(fmt.Sprintf("Mensagem recebida do servidor - %s", mensagemRecebida.Conteudo))
+	}
 }
