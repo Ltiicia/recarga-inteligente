@@ -27,7 +27,7 @@ type Localizacao struct {
 }
 
 type DadosRegiao struct {
-	Area            Area          `json:"area"`
+	Area            Area          `json:"area_cobertura"`
 	PontosDeRecarga []Localizacao `json:"pontos-de-recarga"`
 }
 
@@ -59,7 +59,8 @@ func OpenFile(arquivo string) (DadosRegiao, error) {
 	defer file.Close()
 
 	var dadosRegiao DadosRegiao
-	if erro := json.NewDecoder(file).Decode(&dadosRegiao); erro != nil {
+	erro = json.NewDecoder(file).Decode(&dadosRegiao)
+	if erro != nil {
 		return DadosRegiao{}, (fmt.Errorf("Erro ao ler: %v", erro))
 	}
 	return dadosRegiao, nil

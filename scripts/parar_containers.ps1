@@ -6,7 +6,8 @@ docker-compose down
 Write-Host "Containeres parados e removidos com sucesso!" -ForegroundColor Green
 
 #Exibe os containers em execucao
-docker ps
+docker ps -a
+docker-compose ps -a
 
 #Para rodar, acessar o dir do projeto:
 #.\scripts\parar_containers.ps1

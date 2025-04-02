@@ -3,6 +3,8 @@ Write-Host "Construindo e inicializando os containeres Docker..." -ForegroundCol
 #Executa todos os containers com o docker-compose
 docker-compose up --build
 
+#add -d para executar os containers em segundo plano no terminal
+
 #Para rodar, acessar o dir do projeto:
 #.\scripts\inicializar_containers.ps1
 
