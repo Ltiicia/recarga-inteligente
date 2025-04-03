@@ -14,6 +14,7 @@ func main() {
 	//Inicia o servidor TCP na porta 5000
 	erro := tcpIP.StartServerTCP(":5000", connectionStore, logger)
 	if erro != nil {
-		os.Exit(1)
+		logger.Erro("Erro ao iniciar servidor TCP em StartServerTCP")
+		return
 	}
 }

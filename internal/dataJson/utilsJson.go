@@ -26,9 +26,15 @@ type Localizacao struct {
 	Longitude float64 `json:"longitude"`
 }
 
+type Ponto struct {
+	ID        int     `json:"id"`
+	Latitude  float64 `json:"latitude"`
+	Longitude float64 `json:"longitude"`
+}
+
 type DadosRegiao struct {
-	Area            Area          `json:"area_cobertura"`
-	PontosDeRecarga []Localizacao `json:"pontos-de-recarga"`
+	Area            Area    `json:"area_cobertura"`
+	PontosDeRecarga []Ponto `json:"pontos-de-recarga"`
 }
 
 func ReceiveMessage(conexao net.Conn) (Mensagem, error) {
@@ -64,4 +70,36 @@ func OpenFile(arquivo string) (DadosRegiao, error) {
 		return DadosRegiao{}, (fmt.Errorf("Erro ao ler: %v", erro))
 	}
 	return dadosRegiao, nil
+}
+
+func GetPontosDeRecargaJson() ([]Ponto, error) {
+	dadosRegiao, erro := OpenFile("regiao.json")
+
+	if erro != nil {
+		return dadosRegiao.PontosDeRecarga, fmt.Errorf("Erro ao carregar dados JSON")
+	}
+	return dadosRegiao.PontosDeRecarga, nil
+}
+
+func GetTotalPontosJson() int {
+	pontos, erro := GetPontosDeRecargaJson()
+	if erro != nil {
+		return -1
+	}
+	return len(pontos)
+}
+
+func GetPontoId(id int) (Ponto, int) {
+	dadosRegiao, erro := OpenFile("regiao.json")
+	if erro != nil {
+		return Ponto{}, 1 //Erro ao carregar dados JSON
+	}
+
+	for _, ponto := range dadosRegiao.PontosDeRecarga {
+		if ponto.ID == id {
+			return ponto, 0
+		}
+	}
+
+	return Ponto{}, 2 //Erro ao localizar ponto
 }

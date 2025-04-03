@@ -14,18 +14,19 @@ func main() {
 
 	conexao, erro := tcpIP.ConnectToServerTCP("servidor:5000")
 	if erro != nil {
-		os.Exit(1)
+		logger.Erro("Erro em ConnectToServerTCP - veiculo")
+		return
 	}
 	logger.Info("Veiculo conectado")
 	defer conexao.Close()
 
-	var respostaServidor dataJson.Mensagem
-	respostaServidor, erro = tcpIP.SendIdentification(conexao, "veiculo")
+	respostaServidor, erro := tcpIP.SendIdentification(conexao, "veiculo")
 
 	if erro != nil {
 		logger.Erro(fmt.Sprintf("Erro ao obter resposta do servidor - %v", erro))
 		return
 	}
+	logger.Info(fmt.Sprintf("Mensagem recebida do servidor - %s", respostaServidor.Conteudo))
 
 	if respostaServidor.Tipo == "get-localizacao" {
 		var dadosRegiao dataJson.DadosRegiao
@@ -39,22 +40,22 @@ func main() {
 
 		msg := dataJson.Mensagem{
 			Tipo:     "localizacao",
-			Conteudo: fmt.Sprintf("Localizacao atual - Latitude: %f Longitude: %f", localizacaoAtual.Latitude, localizacaoAtual.Longitude),
+			Conteudo: fmt.Sprintf("%f,%f", localizacaoAtual.Latitude, localizacaoAtual.Longitude),
 			Origem:   "veiculo",
 		}
 		erro := dataJson.SendMessage(conexao, msg)
 		if erro != nil {
 			logger.Erro(fmt.Sprintf("Erro ao enviar localizacao - %v", erro))
 		}
-		//logger.Info(msg.Conteudo)
 	}
 
 	for {
-		mensagemRecebida, erro := dataJson.ReceiveMessage(conexao)
+		respostaServidor, erro := dataJson.ReceiveMessage(conexao)
 		if erro != nil {
 			logger.Erro(fmt.Sprintf("Erro ao ler mensagem do servidor - %v", erro))
 			return
 		}
-		logger.Info(fmt.Sprintf("Mensagem recebida do servidor - %s", mensagemRecebida.Conteudo))
+
+		logger.Info(fmt.Sprintf("Mensagem recebida do servidor - %s", respostaServidor.Conteudo))
 	}
 }

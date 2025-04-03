@@ -20,7 +20,7 @@ func getDelta(x1 float64, x2 float64) float64 {
 // a = [sen²(Δlatitude/2) + cos(latitude1)] x cos(latitude2) x sen²(Δlongitude/2)
 // c = 2 x atan²(√a,√(1−a))
 // d = r x c
-func getDistancia(latitude1, longitude1, latitude2, longitude2 float64) float64 {
+func GetDistancia(latitude1, longitude1, latitude2, longitude2 float64) float64 {
 	//Raio da Terra em metros
 	const raioTerra_m = 6371000
 

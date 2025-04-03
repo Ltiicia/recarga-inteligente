@@ -13,38 +13,51 @@ func main() {
 
 	conexao, erro := tcpIP.ConnectToServerTCP("servidor:5000")
 	if erro != nil {
-		os.Exit(1)
+		logger.Erro("Erro em ConnectToServerTCP - ponto de recarga")
+		return
 	}
 	logger.Info("Ponto de Recarga conectado")
 	defer conexao.Close()
 
 	var respostaServidor dataJson.Mensagem
 	respostaServidor, erro = tcpIP.SendIdentification(conexao, "ponto-de-recarga")
-
+	idPonto := respostaServidor.Conteudo
 	if erro != nil {
-		logger.Erro(fmt.Sprintf("Erro ao obter resposta do servidor - %v", erro))
+		conexao.Close()
 		return
 	}
 
-	if respostaServidor.Tipo == "get-disponibilidade" {
+	if respostaServidor.Tipo == "id" {
 		msg := dataJson.Mensagem{
-			Tipo:     "disponibilidade",
-			Conteudo: "Situacao atual: sem fila",
-			Origem:   "ponto-de-recarga",
+			Tipo:     "registro-id",
+			Conteudo: "ID registrado",
+			Origem:   fmt.Sprintf("ponto-de-recarga-%s", idPonto),
 		}
 		erro := dataJson.SendMessage(conexao, msg)
 		if erro != nil {
 			logger.Erro(fmt.Sprintf("Erro ao enviar disponibilidade - %v", erro))
 		}
-		//logger.Info(msg.Conteudo)
 	}
 
 	for {
-		mensagemRecebida, erro := dataJson.ReceiveMessage(conexao)
+		respostaServidor, erro := dataJson.ReceiveMessage(conexao)
 		if erro != nil {
 			logger.Erro(fmt.Sprintf("Erro ao ler mensagem do servidor - %v", erro))
 			return
 		}
-		logger.Info(fmt.Sprintf("Mensagem recebida do servidor: %s", mensagemRecebida.Conteudo))
+
+		if respostaServidor.Tipo == "get-disponibilidade" {
+			msg := dataJson.Mensagem{
+				Tipo:     "disponibilidade",
+				Conteudo: "Situacao atual: sem fila",
+				Origem:   "ponto-de-recarga",
+			}
+			erro = dataJson.SendMessage(conexao, msg)
+			if erro != nil {
+				logger.Erro(fmt.Sprintf("Erro ao enviar disponibilidade - %v", erro))
+			}
+		}
+
+		logger.Info(fmt.Sprintf("Mensagem recebida do servidor: %s", respostaServidor.Conteudo))
 	}
 }
