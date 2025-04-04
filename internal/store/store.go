@@ -12,7 +12,7 @@ type ConnectionStore struct {
 	pontosDeRecarga map[net.Conn]int
 }
 
-var idAtual = 1
+var idPontoDeRecarga = 1
 
 func NewConnectionStore() *ConnectionStore {
 	return &ConnectionStore{
@@ -30,12 +30,12 @@ func (connection *ConnectionStore) AddVeiculo(conexao net.Conn) {
 func (connection *ConnectionStore) AddPontoRecarga(conexao net.Conn) int {
 	connection.mutex.Lock()
 	defer connection.mutex.Unlock()
-	if idAtual > dataJson.GetTotalPontosJson() {
+	if idPontoDeRecarga > dataJson.GetTotalPontosJson() {
 		return -1
 	}
-	id := idAtual
+	id := idPontoDeRecarga
 	connection.pontosDeRecarga[conexao] = id
-	idAtual++
+	idPontoDeRecarga++
 	return id
 }
 

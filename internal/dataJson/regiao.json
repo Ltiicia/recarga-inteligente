@@ -6,7 +6,7 @@
         {"latitude": -12.1925008, "longitude": -38.8904956},
         {"latitude": -12.1918297, "longitude": -39.0031042}
     ],
-    "area_cobertura":{
+    "area-cobertura":{
         "latitude_max": -12.1918297,
         "latitude_min": -12.3082487,
         "longitude_min": -39.0031042,

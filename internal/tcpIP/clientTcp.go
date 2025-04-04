@@ -15,6 +15,7 @@ func ConnectToServerTCP(serverAddress string) (net.Conn, error) {
 }
 
 func SendIdentification(conexao net.Conn, origem string) (dataJson.Mensagem, error) {
+
 	msg := dataJson.Mensagem{
 		Tipo:     "identificacao",
 		Conteudo: fmt.Sprintf("%s conectado", origem),

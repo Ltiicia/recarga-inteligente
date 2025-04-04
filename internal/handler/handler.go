@@ -37,6 +37,11 @@ func HandleConnection(conexao net.Conn, connectionStore *store.ConnectionStore, 
 			Conteudo: "Ola Veiculo! Informe sua localizacao atual.",
 			Origem:   "servidor",
 		}
+		erro = dataJson.SendDadosRegiao(conexao)
+		if erro != nil {
+			logger.Erro(fmt.Sprintf("Erro ao enviar dados da regiao: %v", erro))
+			return
+		}
 	} else if tipoCliente == "ponto-de-recarga" {
 		idPonto := connectionStore.AddPontoRecarga(conexao)
 		if idPonto == -1 {
@@ -85,7 +90,7 @@ func HandleConnection(conexao net.Conn, connectionStore *store.ConnectionStore, 
 				var latitude, longitude float64
 				_, erro := fmt.Sscanf(mensagemRecebida.Conteudo, "%f,%f", &latitude, &longitude)
 				if erro != nil {
-					logger.Erro(fmt.Sprintf("Erro ao extrair localizacao: %v", erro))
+					logger.Erro(fmt.Sprintf("Erro ao receber localizacao: %v", erro))
 				} else {
 					logger.Info(fmt.Sprintf("Localizacao recebida: Latitude %f, Longitude %f", latitude, longitude))
 				}
@@ -110,16 +115,15 @@ func HandleConnection(conexao net.Conn, connectionStore *store.ConnectionStore, 
 func calcDistancia(latVeiculo float64, lonVeiculo float64, totalPontos int) (map[int]float64, error) {
 	mapDistancias := make(map[int]float64)
 
-	for id := 1; id <= totalPontos; id++ {
-		ponto, erro := dataJson.GetPontoId(id)
-		if erro == 0 {
-			d := distancia.GetDistancia(latVeiculo, lonVeiculo, ponto.Latitude, ponto.Longitude)
-			mapDistancias[id] = d
-		} else if erro == 2 {
-			return mapDistancias, fmt.Errorf("ponto id (%d) nao localizado", id)
-		} else {
-			return mapDistancias, fmt.Errorf("Erro ao carregar arquivo json")
-		}
+	dadosRegiao, erro := dataJson.OpenFile("regiao.json")
+	if erro != nil {
+		return nil, fmt.Errorf("Erro ao abrir arquivo da regiao: %v", erro)
 	}
+
+	for _, ponto := range dadosRegiao.PontosDeRecarga {
+		d := distancia.GetDistancia(latVeiculo, lonVeiculo, ponto.Latitude, ponto.Longitude)
+		mapDistancias[ponto.ID] = d
+	}
+
 	return mapDistancias, nil
 }

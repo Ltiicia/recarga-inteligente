@@ -10,6 +10,7 @@ import (
 
 func StartServerTCP(porta string, connectionStore *store.ConnectionStore, logger *logger.Logger) error {
 	listener, erro := net.Listen("tcp", porta)
+
 	if erro != nil {
 		logger.Erro(fmt.Sprintf("Erro ao iniciar servidor: %v", erro))
 		return nil
