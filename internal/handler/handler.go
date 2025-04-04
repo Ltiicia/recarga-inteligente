@@ -37,6 +37,12 @@ func HandleConnection(conexao net.Conn, connectionStore *store.ConnectionStore, 
 			Conteudo: "Ola Veiculo! Informe sua localizacao atual.",
 			Origem:   "servidor",
 		}
+		//envia
+		erro = dataJson.SendMessage(conexao, mensagemResposta)
+		if erro != nil {
+			logger.Erro(fmt.Sprintf("Erro ao enviar saudacao ao %s: %v", tipoCliente, erro))
+			return
+		}
 		erro = dataJson.SendDadosRegiao(conexao)
 		if erro != nil {
 			logger.Erro(fmt.Sprintf("Erro ao enviar dados da regiao: %v", erro))
@@ -56,12 +62,12 @@ func HandleConnection(conexao net.Conn, connectionStore *store.ConnectionStore, 
 			Conteudo: fmt.Sprintf("%d", idPonto),
 			Origem:   "servidor",
 		}
-	}
-	//envia
-	erro = dataJson.SendMessage(conexao, mensagemResposta)
-	if erro != nil {
-		logger.Erro(fmt.Sprintf("Erro ao enviar saudacao ao %s: %v", tipoCliente, erro))
-		return
+		//envia
+		erro = dataJson.SendMessage(conexao, mensagemResposta)
+		if erro != nil {
+			logger.Erro(fmt.Sprintf("Erro ao enviar saudacao ao %s: %v", tipoCliente, erro))
+			return
+		}
 	}
 
 	for {

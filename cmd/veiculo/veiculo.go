@@ -50,6 +50,7 @@ func main() {
 					logger.Erro(fmt.Sprintf("Erro ao receber dados da regiao - %v", erro))
 					return
 				}
+
 				localizacaoAtual := coordenadas.GetLocalizacaoVeiculo(dadosRegiao.Area)
 
 				msg_localizacao := dataJson.Mensagem{
@@ -60,6 +61,7 @@ func main() {
 				erro = dataJson.SendMessage(conexao, msg_localizacao)
 				if erro != nil {
 					logger.Erro(fmt.Sprintf("Erro ao enviar localizacao - %v", erro))
+
 				}
 			}
 		case "2": //pagamento
