@@ -115,15 +115,16 @@ func HandleConnection(conexao net.Conn, connectionStore *store.ConnectionStore, 
 func calcDistancia(latVeiculo float64, lonVeiculo float64, totalPontos int) (map[int]float64, error) {
 	mapDistancias := make(map[int]float64)
 
-	dadosRegiao, erro := dataJson.OpenFile("regiao.json")
-	if erro != nil {
-		return nil, fmt.Errorf("Erro ao abrir arquivo da regiao: %v", erro)
+	for id := 1; id <= totalPontos; id++ {
+		ponto, erro := dataJson.GetPontoId(id)
+		if erro == 0 {
+			d := distancia.GetDistancia(latVeiculo, lonVeiculo, ponto.Latitude, ponto.Longitude)
+			mapDistancias[id] = d
+		} else if erro == 2 {
+			return mapDistancias, fmt.Errorf("ponto id (%d) nao localizado", id)
+		} else {
+			return mapDistancias, fmt.Errorf("Erro ao carregar arquivo json")
+		}
 	}
-
-	for _, ponto := range dadosRegiao.PontosDeRecarga {
-		d := distancia.GetDistancia(latVeiculo, lonVeiculo, ponto.Latitude, ponto.Longitude)
-		mapDistancias[ponto.ID] = d
-	}
-
 	return mapDistancias, nil
 }

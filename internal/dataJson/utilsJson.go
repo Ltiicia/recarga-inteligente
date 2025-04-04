@@ -138,7 +138,7 @@ func GetPontosDeRecargaJson() ([]Ponto, error) {
 	return dadosRegiao.PontosDeRecarga, nil
 }
 
-/*
+
 func GetPontoId(id int) (Ponto, int) {
 	dadosRegiao, erro := OpenFile("regiao.json")
 	if erro != nil {
@@ -153,4 +153,4 @@ func GetPontoId(id int) (Ponto, int) {
 
 	return Ponto{}, 2 //Erro ao localizar ponto
 }
-*/
+
