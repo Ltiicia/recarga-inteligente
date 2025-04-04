@@ -78,10 +78,11 @@ func HandleConnection(conexao net.Conn, connectionStore *store.ConnectionStore, 
 		}
 
 		if mensagemRecebida.Origem == "ponto-de-recarga" {
-			if mensagemRecebida.Tipo == "registro-id" {
+			if mensagemRecebida.Tipo == "return-id" {
+				id := mensagemRecebida.Conteudo
 				mensagemResposta := dataJson.Mensagem{
 					Tipo:     "get-disponibilidade",
-					Conteudo: "Ola ponto de recarga! Informe sua disponibilidade / fila",
+					Conteudo: fmt.Sprintf("Ola ponto de recarga id (%s)! Informe sua disponibilidade / fila", id),
 					Origem:   "servidor",
 				}
 				erro = dataJson.SendMessage(conexao, mensagemResposta)
@@ -89,17 +90,23 @@ func HandleConnection(conexao net.Conn, connectionStore *store.ConnectionStore, 
 					logger.Erro(fmt.Sprintf("Erro ao enviar resposta ao %s: %v", mensagemInicial.Origem, erro))
 					return
 				}
+				mensagemRecebida, erro := dataJson.ReceiveMessage(conexao)
+				if erro != nil {
+					logger.Erro(fmt.Sprintf("Erro ao receber disponibilidade do %s id (%s): %v", tipoCliente, id, erro))
+					return
+				}
+				logger.Info(fmt.Sprintf("Disponibilidade do Ponto id (%s) recebida: %s", id, mensagemRecebida.Conteudo))
 			}
-			logger.Info(fmt.Sprintf("Mensagem recebida do %s id (%d) => %s", tipoCliente, connectionStore.GetIdPonto(conexao), mensagemRecebida.Conteudo))
 		} else if mensagemRecebida.Origem == "veiculo" {
 			if mensagemRecebida.Tipo == "localizacao" {
 				var latitude, longitude float64
 				_, erro := fmt.Sscanf(mensagemRecebida.Conteudo, "%f,%f", &latitude, &longitude)
 				if erro != nil {
 					logger.Erro(fmt.Sprintf("Erro ao receber localizacao: %v", erro))
-				} else {
-					logger.Info(fmt.Sprintf("Localizacao recebida: Latitude %f, Longitude %f", latitude, longitude))
+					return
 				}
+				logger.Info(fmt.Sprintf("Localizacao recebida: Latitude %f, Longitude %f", latitude, longitude))
+
 				totalPontosConectados := connectionStore.GetTotalPontosConectados()
 
 				mapDistancias, erro := calcDistancia(latitude, longitude, totalPontosConectados)
@@ -112,7 +119,6 @@ func HandleConnection(conexao net.Conn, connectionStore *store.ConnectionStore, 
 					logger.Info(fmt.Sprintf("Distancia para o ponto Id (%d) = %.2f metros", id, d))
 				}
 			}
-			logger.Info(fmt.Sprintf("Mensagem recebida do %s (%s) => %s", tipoCliente, conexao.RemoteAddr(), mensagemRecebida.Conteudo))
 		}
 	}
 	logger.Info(fmt.Sprintf("%s desconectado: %s", tipoCliente, conexao.RemoteAddr()))

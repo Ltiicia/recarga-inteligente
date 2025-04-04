@@ -102,15 +102,15 @@ func OpenFile(arquivo string) (DadosRegiao, error) {
 }
 
 // Cliente
-func ReceiveDadosRegiao(conexao net.Conn) (DadosRegiao, error) {
+func ReceiveDadosRegiao(conexao net.Conn) (DadosRegiao, string, error) {
 	dados, erro := ReceiveDadosJson(conexao)
 	if erro != nil {
-		return DadosRegiao{}, erro
+		return DadosRegiao{}, dados.Titulo, erro
 	}
 	if dados.Titulo != "dados-regiao" {
-		return DadosRegiao{}, fmt.Errorf("tipo de dados inesperado: %s", dados.Titulo)
+		return DadosRegiao{}, dados.Titulo, fmt.Errorf("tipo de dados inesperado: %s", dados.Titulo)
 	}
-	return dados.Dados, nil
+	return dados.Dados, dados.Titulo, nil
 }
 
 // Servidor
@@ -138,7 +138,6 @@ func GetPontosDeRecargaJson() ([]Ponto, error) {
 	return dadosRegiao.PontosDeRecarga, nil
 }
 
-
 func GetPontoId(id int) (Ponto, int) {
 	dadosRegiao, erro := OpenFile("regiao.json")
 	if erro != nil {
@@ -153,4 +152,3 @@ func GetPontoId(id int) (Ponto, int) {
 
 	return Ponto{}, 2 //Erro ao localizar ponto
 }
-

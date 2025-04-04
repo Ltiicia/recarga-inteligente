@@ -29,9 +29,9 @@ func main() {
 
 	if respostaServidor.Tipo == "id" {
 		msg := dataJson.Mensagem{
-			Tipo:     "registro-id",
-			Conteudo: "ID registrado",
-			Origem:   fmt.Sprintf("ponto-de-recarga-%s", idPonto),
+			Tipo:     "return-id",
+			Conteudo: fmt.Sprintf("%s", idPonto),
+			Origem:   "ponto-de-recarga",
 		}
 		erro := dataJson.SendMessage(conexao, msg)
 		if erro != nil {
