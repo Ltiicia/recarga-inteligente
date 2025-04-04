@@ -23,7 +23,6 @@ func HandleConnection(conexao net.Conn, connectionStore *store.ConnectionStore, 
 	tipoCliente := mensagemInicial.Origem
 	if tipoCliente != "veiculo" && tipoCliente != "ponto-de-recarga" {
 		logger.Erro(fmt.Sprintf("Origem desconhecida, encerrando conexao de: %s", tipoCliente))
-		conexao.Close()
 		return
 	}
 
@@ -52,7 +51,6 @@ func HandleConnection(conexao net.Conn, connectionStore *store.ConnectionStore, 
 		if idPonto == -1 {
 			logger.Erro("Ponto de recarga nao cadastrado tentando se conectar")
 			logger.Info(fmt.Sprintf("Ponto de recarga desconhecido desconectado: %s", conexao.RemoteAddr()))
-			conexao.Close()
 			return
 		}
 		logger.Info(fmt.Sprintf("Novo ponto de recarga conectado id: (%d)", idPonto))
