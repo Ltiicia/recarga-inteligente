@@ -45,8 +45,8 @@ func menuVeiculo() string {
 }
 
 func main() {
+	//inicializa o veiculo e conecta ao servidor
 	logger := logger.NewLogger(os.Stdout)
-
 	conexao, erro := tcpIP.ConnectToServerTCP("servidor:5000")
 	if erro != nil {
 		logger.Erro("Erro em ConnectToServerTCP - veiculo")
@@ -55,19 +55,17 @@ func main() {
 	logger.Info("Veiculo conectado")
 	defer conexao.Close()
 
-	var respostaServidor dataJson.Mensagem
-
+	//exibe menu de opcoes
 	for {
 		opcao := menuVeiculo()
-
 		switch opcao {
 		case "1": //recarga
-			respostaServidor, erro = tcpIP.SendIdentification(conexao, "veiculo")
+			//envia identificacao ao servidor e recebe resposta
+			respostaServidor, erro := tcpIP.SendIdentification(conexao, "veiculo")
 			if erro != nil {
 				logger.Erro(fmt.Sprintf("Erro ao obter resposta do servidor - %v", erro))
 				return
 			}
-
 			logger.Info(fmt.Sprintf("Mensagem recebida do servidor - %s", respostaServidor.Conteudo))
 
 			if respostaServidor.Tipo == "get-localizacao" {

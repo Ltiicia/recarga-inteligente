@@ -37,7 +37,6 @@ func HandleConnection(conexao net.Conn, connectionStore *store.ConnectionStore, 
 			Conteudo: "Ola Veiculo! Informe sua localizacao atual.",
 			Origem:   "servidor",
 		}
-		//envia
 		erro = dataJson.SendMessage(conexao, mensagemResposta)
 		if erro != nil {
 			logger.Erro(fmt.Sprintf("Erro ao enviar saudacao ao %s: %v", tipoCliente, erro))
