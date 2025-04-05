@@ -9,18 +9,6 @@ import (
 	"recarga-inteligente/internal/tcpIP"
 )
 
-func confirmaRecebimentoId(idPonto string, logger *logger.Logger, conexao net.Conn) {
-	msg := dataJson.Mensagem{
-		Tipo:     "return-id",
-		Conteudo: fmt.Sprintf("%s", idPonto),
-		Origem:   "ponto-de-recarga",
-	}
-	erro := dataJson.SendMessage(conexao, msg)
-	if erro != nil {
-		logger.Erro(fmt.Sprintf("Erro ao enviar disponibilidade - %v", erro))
-	}
-}
-
 func enviarDisponibilidade(logger *logger.Logger, conexao net.Conn) {
 	msg := dataJson.Mensagem{
 		Tipo:     "disponibilidade",
@@ -30,6 +18,14 @@ func enviarDisponibilidade(logger *logger.Logger, conexao net.Conn) {
 	erro := dataJson.SendMessage(conexao, msg)
 	if erro != nil {
 		logger.Erro(fmt.Sprintf("Erro ao enviar disponibilidade - %v", erro))
+	}
+}
+
+func IdentificacaoInicial(logger *logger.Logger, conexao net.Conn) {
+	erro := tcpIP.SendIdentification(conexao, "ponto-de-recarga")
+	if erro != nil {
+		logger.Erro(fmt.Sprintf("Erro ao obter resposta do servidor - %v", erro))
+		return
 	}
 }
 
@@ -43,30 +39,21 @@ func main() {
 	}
 	logger.Info("Ponto de Recarga conectado")
 	defer conexao.Close()
-	//envia identificacao ao servidor
-	respostaServidor, erro := tcpIP.SendIdentification(conexao, "ponto-de-recarga")
-	if erro != nil {
-		logger.Erro(fmt.Sprintf("Erro ao obter resposta do servidor - %v", erro))
-		return
-	}
-	//recebe id atribuido
-	idPonto := respostaServidor.Conteudo
-	if respostaServidor.Tipo == "id" {
-		//envia ccnfirmacao
-		confirmaRecebimentoId(idPonto, logger, conexao)
-	}
-	//recebe mensagens do servidor
+	//envia identificacao inicial
+	IdentificacaoInicial(logger, conexao)
+
+	//recebe solicitacoes do servidor
 	for {
-		respostaServidor, erro := dataJson.ReceiveMessage(conexao)
+		solicitacaoServidor, erro := dataJson.ReceiveMessage(conexao)
 		if erro != nil {
 			logger.Erro(fmt.Sprintf("Erro ao ler mensagem do servidor - %v", erro))
 			return
 		}
 
-		if respostaServidor.Tipo == "get-disponibilidade" {
+		if solicitacaoServidor.Tipo == "get-disponibilidade" {
 			enviarDisponibilidade(logger, conexao)
+		} else {
+			logger.Info(fmt.Sprintf("Mensagem recebida do servidor: %s", solicitacaoServidor.Conteudo))
 		}
-
-		logger.Info(fmt.Sprintf("Mensagem recebida do servidor: %s", respostaServidor.Conteudo))
 	}
 }

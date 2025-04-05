@@ -3,6 +3,7 @@ package store
 import (
 	"net"
 	"recarga-inteligente/internal/dataJson"
+	"sort"
 	"sync"
 )
 
@@ -10,14 +11,20 @@ type ConnectionStore struct {
 	mutex           sync.Mutex
 	veiculos        map[net.Conn]string
 	pontosDeRecarga map[net.Conn]int
+	idsCadastrados  []int
 }
 
-var idPontoDeRecarga = 1
-
 func NewConnectionStore() *ConnectionStore {
+	total := dataJson.GetTotalPontosJson()
+	idsJson := make([]int, 0, total)
+	for i := 1; i <= total; i++ {
+		idsJson = append(idsJson, i)
+	}
+
 	return &ConnectionStore{
 		veiculos:        make(map[net.Conn]string),
 		pontosDeRecarga: make(map[net.Conn]int),
+		idsCadastrados:  idsJson,
 	}
 }
 
@@ -30,12 +37,12 @@ func (connection *ConnectionStore) AddVeiculo(conexao net.Conn) {
 func (connection *ConnectionStore) AddPontoRecarga(conexao net.Conn) int {
 	connection.mutex.Lock()
 	defer connection.mutex.Unlock()
-	if idPontoDeRecarga > dataJson.GetTotalPontosJson() {
+	if len(connection.idsCadastrados) == 0 {
 		return -1
 	}
-	id := idPontoDeRecarga
+	id := connection.idsCadastrados[0]
+	connection.idsCadastrados = connection.idsCadastrados[1:] //remove o id utilizado
 	connection.pontosDeRecarga[conexao] = id
-	idPontoDeRecarga++
 	return id
 }
 
@@ -57,7 +64,13 @@ func (connection *ConnectionStore) RemoveConnection(conexao net.Conn) {
 	connection.mutex.Lock()
 	defer connection.mutex.Unlock()
 
-	delete(connection.veiculos, conexao)
-	delete(connection.pontosDeRecarga, conexao)
+	id, idExiste := connection.pontosDeRecarga[conexao]
+	if idExiste {
+		connection.idsCadastrados = append(connection.idsCadastrados, id) //retorna o id para a lista
+		sort.Ints(connection.idsCadastrados)                              //ordena
+		delete(connection.pontosDeRecarga, conexao)
+	} else {
+		delete(connection.veiculos, conexao)
+	}
 	conexao.Close()
 }

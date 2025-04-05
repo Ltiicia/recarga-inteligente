@@ -14,8 +14,7 @@ func ConnectToServerTCP(serverAddress string) (net.Conn, error) {
 	return conexao, nil
 }
 
-func SendIdentification(conexao net.Conn, origem string) (dataJson.Mensagem, error) {
-
+func SendIdentification(conexao net.Conn, origem string) error {
 	msg := dataJson.Mensagem{
 		Tipo:     "identificacao",
 		Conteudo: fmt.Sprintf("%s conectado", origem),
@@ -24,12 +23,8 @@ func SendIdentification(conexao net.Conn, origem string) (dataJson.Mensagem, err
 
 	erro := dataJson.SendMessage(conexao, msg)
 	if erro != nil {
-		return msg, fmt.Errorf("erro ao enviar identificacao: %v", erro)
+		return fmt.Errorf("erro ao enviar identificacao: %v", erro)
 	}
 
-	resposta, erro := dataJson.ReceiveMessage(conexao)
-	if erro != nil {
-		return resposta, fmt.Errorf("erro ao receber resposta do servidor: %v", erro)
-	}
-	return resposta, nil
+	return nil
 }
