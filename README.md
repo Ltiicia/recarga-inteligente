@@ -2,8 +2,7 @@
 <h4 align="center">Projeto da disciplina TEC502 - Concorrência e Conectividade.</h4>
 
 <p align="center">Este projeto foi desenvolvido para facilitar a comunicação entre veículos elétricos e pontos de recarga. Utilizando uma arquitetura cliente-servidor baseada no protocolo TCP/IP, o sistema permite que veículos solicitem recargas, informem sua localização atual gerada de forma randômica e recebam recomendações para pontos de recarga próximos.</p>
-<p align="center">Cujo objetivo é otimizar o processo de recarga, garantindo eficiência e gerenciamento adequado da concorrência.</p>
-
+<p align="center">O objetivo é otimizar o processo de recarga, garantindo eficiência e gerenciamento adequado da concorrência.</p>
 ---
 ## Sumário
 
@@ -17,7 +16,6 @@
 - [Referências](#referências)
 
 ---
-
 ## Introdução
 
 O presente sistema foi desenvolvido para implementar comunicação entre cliente-servidor simulando o contexto de recarga de veículos elétricos. O projeto viabiliza a solicitação e gestão de recargas por parte dos veículos, utilizando o protocolo TCP/IP e desenvolvimento em Go, com suporte para múltiplas conexões simultâneas.  
@@ -29,8 +27,6 @@ A aplicação está contida em containers Docker, que isolam e orquestram a exec
 
 Porcionando então, uma solução que permite aos veículos encontrar, reservar e utilizar pontos de recarga de forma otimizada, considerando fatores como proximidade e disponibilidade.  
 
----
-
 ## Funcionalidades
 
 - **Solicitação de Recarga**: O veículo pode solicitar uma recarga ao servidor.
@@ -40,8 +36,6 @@ Porcionando então, uma solução que permite aos veículos encontrar, reservar 
 - **Reserva de Ponto de Recarga**: O veículo recebe as opções e seleciona o ponto desejado.
 - **Gerenciamento de Fila**: O servidor efetua a reserva adicionando o veículo à fila do ponto de recarga escolhido.
 - **Finalização e Liberação**: O veículo é removido da fila ao final da recarga e recebe o valor para pagamento.
-
----
 
 ## Arquitetura do Sistema
 
@@ -81,27 +75,31 @@ A comunicação entre as partes ocorre via **sockets TCP/IP** conforme ilustraç
   <p><em>Arquitetura do Sistema</em></p>
 </div>
 
+### Comunicação
+
+- Veículo solicita recarga ao servidor.
+- Servidor solicita localização atual ao veículo.
+- Veículo envia sua localização (latitude e longitude) atual.
+- Servidor solicita disponibilidade/fila aos pontos de recarga conectados.
+- Pontos enviam disponibilidade/fila atual.
+- Servidor calcula as distâncias do veículo até os pontos, verifica fila e define as melhores opções.
+- Servidor envia melhores opções ao veículo.
+- Veículo seleciona um ponto e solicita reserva.
+- Servidor confirma a reserva e adiciona o veículo à fila do ponto.
+- Veículo se desloca e realiza a recarga.
+- Ponto remove o veículo da sua fila ao final da recarga.
+- O valor da recarga é vinculado ao veículo.
+
+## Protocolo de Comunicação
+
 ### Execução com Docker
 A simulação do sistema é feita utilizando docker-compose, com containers para o Servidor, os Pontos de recarga e os Veículos. O Docker Compose permite aos módulos compartilhar uma rede interna privada, proporcionando a troca de mensagens TCP entre os containers.
 
 ---
 
-### Comunicação
 
-1. Veículo solicita recarga ao servidor.
-2. Servidor solicita localização atual ao veículo.
-3. Veículo envia latitude e longitude atual.
-4. Servidor solicita disponibilidade/fila aos pontos de recarga conectados.
-5. Pontos enviam disponibilidade/fila atual.
-6. Servidor calcula distâncias do veículo até os pontos.
-7. Servidor envia melhores opções ao veículo.
-8. Veículo seleciona um ponto e solicita reserva.
-9. Servidor confirma a reserva e adiciona o veículo à fila do ponto.
-10. Veículo se desloca e realiza a recarga.
-11. Ponto remove o veículo da sua fila ao final da recarga.
-12. O valor da recarga é vinculado ao veículo.
 
-## Protocolo de Comunicação
+
 ...
 
 ## Gerenciamento de Concorrência
