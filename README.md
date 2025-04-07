@@ -92,6 +92,12 @@ A comunicação entre as partes ocorre via **sockets TCP/IP** conforme ilustraç
 ## Protocolo de Comunicação
 A comunicação entre os clientes e o servidor é baseada em mensagens JSON transmitidas via sockets TCP. O formato JSON foi escolhido por ser leve, legível e amplamente adotado em sistemas distribuídos. Cada mensagem permite a troca de informações, dados, além de encapsular ações como identificação, requisição de recarga, resposta de disponibilidade, reservas, entre outros.
 
+### Dados e Estado
+Os dados do sistema como área de cobertura e localização dos pontos de recarga cadastrados, são carregados a partir de arquivos JSON ao iniciar o servidor e permanecem em memória, funcionando como um cache de alta performance. Isso reduz a latência e permite respostas rápidas às requisições dos veículos.  
+
+### Paradigma de Comunicação
+O sistema segue o paradigma stateless para comunicação com os veículos. Cada requisição é independente, e os veículos devem se identificar a cada nova interação. Isso facilita a escalabilidade e permite a execução de múltiplas instâncias do servidor, se necessário. Apesar de ser stateless para veículos, o sistema possui uma gestão de estado parcial para os pontos de recarga, que mantêm sessões ativas enquanto conectados ao servidor, permitindo a troca contínua de mensagens e atualização de suas filas de recarga.
+
 ## Conexões Simultâneas
 O servidor foi projetado para suportar múltiplas conexões simultâneas utilizando goroutines, nativas da linguagem Go. A cada nova conexão, uma nova goroutine é iniciada, permitindo que o servidor processe requisições de forma paralela e responsiva, sem bloquear outras conexões, maximizando a escalabilidade do sistema e garantindo que a resposta a uma solicitação de recarga, por exemplo, não afete outras conexões ativas.
 
@@ -105,11 +111,17 @@ Funcionamento:
 
 Essa abordagem evita problemas como múltiplos veículos tentando ocupar a mesma posição na fila de reservas de um determinado ponto de recarga.
 
+### Garantia de Reserva e Integridade
+Ao solicitar uma recarga, o veículo envia sua localização atual ao servidor. O servidor, então:
+
+- Solicita a disponibilidade / fila dos pontos de recarga conectados.
+- Calcula as distâncias e os scores estimados com base nas filas.
+- Retorna ao veículo as três melhores opções de pontos.
+
+Após a escolha, o veículo é adicionado à fila do ponto selecionado. Para garantir a integridade da operação, cada etapa é realizada com controle de concorrência utilizando mutexes e channels, impedindo que dois veículos reservem a mesma posição simultaneamente.
 
 ### Execução com Docker
 A simulação do sistema é feita utilizando docker-compose, com containers para o Servidor, os Pontos de recarga e os Veículos. O Docker Compose permite aos módulos compartilhar uma rede interna privada, proporcionando a troca de mensagens TCP entre os containers.
-
-
 
 ## Tecnologias Utilizadas
 - Linguagem: Go (Golang)
