@@ -210,8 +210,6 @@ func SalvarVeiculo(placa string) error {
 	return salvarDadosVeiculos(path, dadosVeiculos)
 }
 
-// Modificar a função RegistrarRecarga para maior robustez:
-
 func RegistrarRecarga(placa string, pontoID int, valor float64) error {
 	// Verificar entrada
 	if placa == "" {
@@ -225,7 +223,7 @@ func RegistrarRecarga(placa string, pontoID int, valor float64) error {
 	}
 
 	path := filepath.Join("app", "internal", "dataJson", "veiculos.json")
-	// Tentar caminhos alternativos se o padrão não funcionar
+
 	alternatives := []string{
 		"internal/dataJson/veiculos.json",
 		"veiculos.json",
@@ -242,7 +240,7 @@ func RegistrarRecarga(placa string, pontoID int, valor float64) error {
 		for _, altPath := range alternatives {
 			file, err = os.Open(altPath)
 			if err == nil {
-				path = altPath // Usar este caminho para salvar também
+				path = altPath
 				break
 			}
 			lastErr = err
@@ -334,7 +332,6 @@ func salvarDadosVeiculos(path string, dados DadosVeiculos) error {
 	return encoder.Encode(dados)
 }
 
-// ObterUltimoReserva retorna o ID do ponto de recarga da reserva mais recente de um veículo
 func ObterUltimoReserva(placa string) (int, error) {
 	path := filepath.Join("app", "internal", "dataJson", "veiculos.json")
 
@@ -363,7 +360,6 @@ func ObterUltimoReserva(placa string) (int, error) {
 	return 0, fmt.Errorf("veículo com placa %s não encontrado ou sem reservas", placa)
 }
 
-// No arquivo internal/dataJson/utilsJson.go
 func PlacaJaExiste(placa string) bool {
 	path := filepath.Join("app", "internal", "dataJson", "veiculos.json")
 
@@ -394,9 +390,6 @@ func PlacaJaExiste(placa string) bool {
 	return false // Placa não existe
 }
 
-// Adicione esta função para obter o histórico de recargas:
-
-// ObterHistoricoRecargas retorna o histórico de recargas de um veículo específico
 func ObterHistoricoRecargas(placa string) ([]Recarga, error) {
 	path := filepath.Join("app", "internal", "dataJson", "veiculos.json")
 	alternatives := []string{

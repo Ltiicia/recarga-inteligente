@@ -15,13 +15,11 @@ import (
 	"time"
 )
 
-// Corrigir o bug na função EnviarLocalizacao:
 func EnviarLocalizacao(logger *logger.Logger, conexao net.Conn) bool {
 	dadosRegiao, _, erro := dataJson.ReceiveDadosRegiao(conexao)
 	if erro != nil {
 		logger.Erro(fmt.Sprintf("Erro ao receber dados da regiao - %v", erro))
 		return false
-		// remover o "return placa" errado que está aqui
 	}
 	localizacaoAtual := coordenadas.GetLocalizacaoVeiculo(dadosRegiao.Area)
 	msg_localizacao := dataJson.Mensagem{
@@ -37,8 +35,6 @@ func EnviarLocalizacao(logger *logger.Logger, conexao net.Conn) bool {
 	fmt.Println("Localização enviada, aguardando ranking de pontos...")
 	return true
 }
-
-// Corrigir a função processarRankingPontos para exibir mensagens limpas:
 
 func processarRankingPontos(logger *logger.Logger, conexao net.Conn, placa string) {
 	// Esperar a resposta com o ranking
@@ -71,23 +67,22 @@ func processarRankingPontos(logger *logger.Logger, conexao net.Conn, placa strin
 
 	indice, erro := strconv.Atoi(escolha)
 	if erro != nil || indice < 1 || indice > 3 {
-		fmt.Println("❌ Escolha inválida. Retornando ao menu principal.")
+		fmt.Println("Escolha inválida. Retornando ao menu principal.")
 		return
 	}
 
 	// Extrair o ID do ponto da linha escolhida
 	if indice <= 0 || indice > len(linhas)-1 {
-		fmt.Println("❌ Escolha fora do range de opções disponíveis.")
+		fmt.Println("Escolha fora do range de opções disponíveis.")
 		return
 	}
 
-	// Usar uma variável temporária para o número da opção para não sobrescrever o índice
 	var numeroOpcao int
 	var pontoID int
 	_, err := fmt.Sscanf(linhas[indice-1], "%d. Ponto ID: %d", &numeroOpcao, &pontoID)
 	if err != nil {
 		logger.Erro(fmt.Sprintf("Erro ao obter ID do ponto: %v", err))
-		fmt.Println("❌ Erro ao processar sua escolha. Tente novamente.")
+		fmt.Println("Erro ao processar sua escolha. Tente novamente.")
 		return
 	}
 
@@ -101,30 +96,27 @@ func processarRankingPontos(logger *logger.Logger, conexao net.Conn, placa strin
 	erro = dataJson.SendMessage(conexao, msg)
 	if erro != nil {
 		logger.Erro(fmt.Sprintf("Erro ao enviar solicitação de reserva: %v", erro))
-		fmt.Println("❌ Erro de comunicação. Tente novamente.")
+		fmt.Println("Erro de comunicação. Tente novamente.")
 		return
 	}
 
-	fmt.Printf("\n⏳ Reserva solicitada para o ponto ID %d. Aguardando confirmação...\n", pontoID)
+	fmt.Printf("\nReserva solicitada para o ponto ID %d. Aguardando confirmação...\n", pontoID)
 
 	// Aguardar confirmação
 	confirmacao, erro := dataJson.ReceiveMessage(conexao)
 	if erro != nil {
 		logger.Erro(fmt.Sprintf("Erro ao receber confirmação: %v", erro))
-		fmt.Println("❌ Erro ao receber confirmação. Tente novamente.")
+		fmt.Println("Erro ao receber confirmação. Tente novamente.")
 		return
 	}
 
 	// Processar a resposta do servidor de forma limpa
 	fmt.Println("\n----- STATUS DA RESERVA -----")
-
 	if confirmacao.Tipo == "reserva-confirmada" || confirmacao.Tipo == "sua-vez" {
 		// Se for mensagem de confirmação de reserva
 		if confirmacao.Tipo == "reserva-confirmada" {
-			fmt.Println("✅ " + confirmacao.Conteudo)
-
-			// Não devemos nos deslocar imediatamente, apenas confirmar a reserva
-			// e aguardar nossa vez na fila
+			fmt.Println(" " + confirmacao.Conteudo)
+			// confirma a reserva e aguarda a vez na fila
 			if strings.Contains(confirmacao.Conteudo, "Você é o próximo") {
 				fmt.Println("Aguardando autorização para iniciar deslocamento...")
 			} else if strings.Contains(confirmacao.Conteudo, "fila") {
@@ -132,10 +124,10 @@ func processarRankingPontos(logger *logger.Logger, conexao net.Conn, placa strin
 			}
 		}
 
-		// Se já for diretamente nossa vez (sem passar pela fila)
+		// Se já for a vez (sem passar pela fila)
 		if confirmacao.Tipo == "sua-vez" {
-			fmt.Println("🔄 É sua vez! Autorizado a se deslocar ao ponto de recarga.")
-			fmt.Println("🚗 Iniciando deslocamento até o ponto de recarga...")
+			fmt.Println("É sua vez! Autorizado a se deslocar ao ponto de recarga.")
+			fmt.Println("Iniciando deslocamento até o ponto de recarga...")
 			time.Sleep(10 * time.Second) // Simulando deslocamento
 
 			// Informar ao servidor que chegou
@@ -145,7 +137,7 @@ func processarRankingPontos(logger *logger.Logger, conexao net.Conn, placa strin
 				Origem:   "veiculo",
 			}
 			dataJson.SendMessage(conexao, msgChegada)
-			fmt.Println("🚶 Chegou ao ponto de recarga, aguardando início do carregamento...")
+			fmt.Println("Chegou ao ponto de recarga, aguardando início do carregamento...")
 		}
 
 		// Loop para receber mensagens do servidor enquanto aguarda
@@ -163,12 +155,12 @@ func processarRankingPontos(logger *logger.Logger, conexao net.Conn, placa strin
 				switch mensagem.Tipo {
 				case "posicao-fila":
 					// Mostrar posição na fila
-					fmt.Println("🔄 " + mensagem.Conteudo)
+					fmt.Println(" " + mensagem.Conteudo)
 
 				case "sua-vez":
 					// Agora é a vez do veículo - deve iniciar deslocamento
-					fmt.Println("🔄 É sua vez! Autorizado a se deslocar ao ponto de recarga.")
-					fmt.Println("🚗 Iniciando deslocamento até o ponto de recarga...")
+					fmt.Println("É sua vez! Autorizado a se deslocar ao ponto de recarga.")
+					fmt.Println("Iniciando deslocamento até o ponto de recarga...")
 					time.Sleep(10 * time.Second) // Simulando deslocamento
 
 					// Informar ao servidor que chegou
@@ -178,15 +170,15 @@ func processarRankingPontos(logger *logger.Logger, conexao net.Conn, placa strin
 						Origem:   "veiculo",
 					}
 					dataJson.SendMessage(conexao, msgChegada)
-					fmt.Println("🚶 Chegou ao ponto de recarga, aguardando início do carregamento...")
+					fmt.Println("Chegou ao ponto de recarga, aguardando início do carregamento...")
 
 				case "recarga-iniciada":
 					// Só agora inicia-se o carregamento de fato
-					fmt.Println("🔌 Iniciando carregamento...")
-					fmt.Println("⚡ " + mensagem.Conteudo)
+					fmt.Println("Iniciando carregamento...")
+					fmt.Println(" " + mensagem.Conteudo)
 
 				case "recarga-finalizada":
-					fmt.Println("✅ " + mensagem.Conteudo)
+					fmt.Println("" + mensagem.Conteudo)
 					fmt.Println("Recarga concluída! Retornando ao menu principal...")
 					close(recargaConcluida)
 					return
@@ -208,19 +200,17 @@ func processarRankingPontos(logger *logger.Logger, conexao net.Conn, placa strin
 			return
 		}
 	} else if confirmacao.Tipo == "reserva-falhou" {
-		fmt.Println("❌ " + confirmacao.Conteudo)
+		fmt.Println(" " + confirmacao.Conteudo)
 		fmt.Println("Retornando ao menu principal...")
 		return
 	} else {
-		// Tratar outros tipos de mensagens inesperadas
 		logger.Erro(fmt.Sprintf("Tipo de confirmação inesperado: %s", confirmacao.Tipo))
-		fmt.Println("❓ Resposta inesperada do servidor. Tente novamente.")
+		fmt.Println(" Resposta inesperada do servidor. Tente novamente.")
 		fmt.Println("-------------------------------")
 		return
 	}
 }
 
-// Modificar a função IdentificacaoInicial para verificar com o servidor
 func IdentificacaoInicial(logger *logger.Logger, conexao net.Conn) string {
 	leitor := bufio.NewReader(os.Stdin)
 	placa := ""
@@ -233,7 +223,7 @@ func IdentificacaoInicial(logger *logger.Logger, conexao net.Conn) string {
 
 		// Validar formato da placa
 		if len(placa) < 6 || len(placa) > 8 {
-			fmt.Println("❌ Placa inválida! A placa deve ter entre 6 e 8 caracteres.")
+			fmt.Println("Placa inválida! A placa deve ter entre 6 e 8 caracteres.")
 			continue
 		}
 
@@ -260,7 +250,7 @@ func IdentificacaoInicial(logger *logger.Logger, conexao net.Conn) string {
 		if resposta.Tipo == "placa-disponivel" {
 			placaValida = true
 		} else if resposta.Tipo == "placa-indisponivel" {
-			fmt.Println("❌ Esta placa já está em uso por outro veículo!")
+			fmt.Println("Esta placa já está em uso por outro veículo!")
 		} else {
 			logger.Erro(fmt.Sprintf("Resposta inesperada do servidor: %s", resposta.Tipo))
 			return ""
@@ -283,7 +273,6 @@ func IdentificacaoInicial(logger *logger.Logger, conexao net.Conn) string {
 	return placa
 }
 
-// Nova função para verificar se a placa já existe
 func placaJaExiste(placa string) bool {
 	path := filepath.Join("app", "internal", "dataJson", "veiculos.json")
 
@@ -300,7 +289,6 @@ func placaJaExiste(placa string) bool {
 	}
 	defer file.Close()
 
-	// Decodificar dados existentes
 	var dadosVeiculos dataJson.DadosVeiculos
 	if err := json.NewDecoder(file).Decode(&dadosVeiculos); err != nil {
 		// Se não conseguir decodificar, também assumimos que a placa não existe
@@ -313,11 +301,9 @@ func placaJaExiste(placa string) bool {
 			return true // Placa já existe
 		}
 	}
-
 	return false // Placa não existe
 }
 
-// Também precisamos corrigir a função MenuVeiculo para não chamar IdentificacaoInicial duas vezes:
 func MenuVeiculo(logger *logger.Logger, conexao net.Conn) {
 	leitor := bufio.NewReader(os.Stdin)
 	on := true
@@ -343,14 +329,8 @@ func MenuVeiculo(logger *logger.Logger, conexao net.Conn) {
 		switch opcao {
 		case "1":
 			SolicitarRecarga(logger, conexao, placa)
-			//recebeAsMelhoresOpcoes
-			//Escolhe uma p fazer a reserva
-			//carrega o veiculo
-			//salva o valor da recarga
-			//retorna ao menu
 
-		case "2": // consultar pagamentos/recargas
-			// Enviar solicitação ao servidor
+		case "2":
 			msgConsulta := dataJson.Mensagem{
 				Tipo:     "consultar-historico",
 				Conteudo: placa,
@@ -360,7 +340,7 @@ func MenuVeiculo(logger *logger.Logger, conexao net.Conn) {
 			erro := dataJson.SendMessage(conexao, msgConsulta)
 			if erro != nil {
 				logger.Erro(fmt.Sprintf("Erro ao solicitar histórico: %v", erro))
-				fmt.Println("❌ Erro ao consultar pagamentos. Tente novamente mais tarde.")
+				fmt.Println("Erro ao consultar pagamentos. Tente novamente mais tarde.")
 				continue
 			}
 
@@ -368,27 +348,26 @@ func MenuVeiculo(logger *logger.Logger, conexao net.Conn) {
 			resposta, erro := dataJson.ReceiveMessage(conexao)
 			if erro != nil {
 				logger.Erro(fmt.Sprintf("Erro ao receber histórico: %v", erro))
-				fmt.Println("❌ Erro ao consultar pagamentos. Tente novamente mais tarde.")
+				fmt.Println("Erro ao consultar pagamentos. Tente novamente mais tarde.")
 				continue
 			}
 
 			if resposta.Tipo == "historico-erro" {
-				fmt.Println("❌ " + resposta.Conteudo)
+				fmt.Println("" + resposta.Conteudo)
 				continue
 			}
 
 			if resposta.Tipo != "historico-recargas" {
 				logger.Erro(fmt.Sprintf("Tipo de resposta inesperado: %s", resposta.Tipo))
-				fmt.Println("❌ Resposta inesperada do servidor. Tente novamente mais tarde.")
+				fmt.Println("Resposta inesperada do servidor. Tente novamente mais tarde.")
 				continue
 			}
 
-			// Deserializar o histórico
 			var recargas []dataJson.Recarga
 			erro = json.Unmarshal([]byte(resposta.Conteudo), &recargas)
 			if erro != nil {
 				logger.Erro(fmt.Sprintf("Erro ao deserializar histórico: %v", erro))
-				fmt.Println("❌ Erro ao processar histórico recebido. Tente novamente mais tarde.")
+				fmt.Println("Erro ao processar histórico recebido. Tente novamente mais tarde.")
 				continue
 			}
 
@@ -452,9 +431,6 @@ func SolicitarRecarga(logger *logger.Logger, conexao net.Conn, placa string) {
 	}
 }
 
-// Adicione essa função no final do arquivo:
-
-// Função para consultar o histórico de pagamentos de um veículo
 func consultarPagamentosVeiculo(placa string) ([]dataJson.Recarga, error) {
 	path := filepath.Join("app", "internal", "dataJson", "veiculos.json")
 
@@ -482,7 +458,5 @@ func consultarPagamentosVeiculo(placa string) ([]dataJson.Recarga, error) {
 			return v.Recargas, nil
 		}
 	}
-
-	// Veículo não encontrado (não deveria acontecer se o veículo está logado)
 	return []dataJson.Recarga{}, nil
 }

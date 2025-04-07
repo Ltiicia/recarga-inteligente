@@ -9,7 +9,7 @@ import (
 
 type ConnectionStore struct {
 	mutex           sync.Mutex
-	veiculos        map[net.Conn]string // Agora armazena a placa em vez do endereço
+	veiculos        map[net.Conn]string
 	pontosDeRecarga map[net.Conn]int
 	idsCadastrados  []int
 }
@@ -28,7 +28,6 @@ func NewConnectionStore() *ConnectionStore {
 	}
 }
 
-// Modifique a função para garantir que a placa seja usada corretamente:
 func (connection *ConnectionStore) AddVeiculo(conexao net.Conn, placa string) {
 	connection.mutex.Lock()
 	defer connection.mutex.Unlock()
@@ -88,7 +87,6 @@ func (connection *ConnectionStore) GetPontosMap() map[net.Conn]int {
 	connection.mutex.Lock()
 	defer connection.mutex.Unlock()
 
-	// Crie uma cópia para evitar race conditions
 	pontosCopy := make(map[net.Conn]int)
 	for conn, id := range connection.pontosDeRecarga {
 		pontosCopy[conn] = id
@@ -111,14 +109,12 @@ func (connection *ConnectionStore) GetConexaoPorID(id int) net.Conn {
 	return nil
 }
 
-// Adicionar função para obter a placa do veículo:
 func (connection *ConnectionStore) GetVeiculoPlaca(conexao net.Conn) string {
 	connection.mutex.Lock()
 	defer connection.mutex.Unlock()
 	return connection.veiculos[conexao]
 }
 
-// Retorna a conexão de um veículo pela sua placa
 func (connection *ConnectionStore) GetConexaoPorPlaca(placa string) net.Conn {
 	connection.mutex.Lock()
 	defer connection.mutex.Unlock()
@@ -132,7 +128,6 @@ func (connection *ConnectionStore) GetConexaoPorPlaca(placa string) net.Conn {
 	return nil
 }
 
-// GetTodasPlacasAtivas returns all active vehicle plates
 func (connection *ConnectionStore) GetTodasPlacasAtivas() []string {
 	connection.mutex.Lock()
 	defer connection.mutex.Unlock()

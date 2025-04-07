@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
-	"math/rand" // Adicionar esta importação
 	"net"
 	"recarga-inteligente/internal/dataJson"
 	"recarga-inteligente/internal/distancia"
@@ -14,7 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"time" // Adicionar esta importação para inicializar o gerador de números aleatórios
+	"time"
 )
 
 // Adicionar depois das importações
@@ -36,9 +35,6 @@ var (
 
 func HandleConnection(conexao net.Conn, connectionStore *store.ConnectionStore, logger *logger.Logger) {
 	defer connectionStore.RemoveConnection(conexao)
-
-	// Inicializa o gerador de números aleatórios com uma semente
-	rand.Seed(time.Now().UnixNano())
 
 	on := true
 	for on {
@@ -69,7 +65,6 @@ func HandleConnection(conexao net.Conn, connectionStore *store.ConnectionStore, 
 	}
 }
 
-// Função para lidar com mensagens de pontos de recarga
 func handlePontoDeRecarga(logger *logger.Logger, connectionStore *store.ConnectionStore, conexao net.Conn, mensagem dataJson.Mensagem) {
 	if mensagem.Tipo == "identificacao" {
 		idPonto := connectionStore.AddPontoRecarga(conexao)
@@ -86,9 +81,7 @@ func handlePontoDeRecarga(logger *logger.Logger, connectionStore *store.Connecti
 		return
 	}
 
-	// Obter ID do ponto antes de processar outros tipos de mensagens
 	id := connectionStore.GetIdPonto(conexao)
-
 	switch mensagem.Tipo {
 	case "chamando-veiculo":
 		// O ponto está chamando um veículo para atendimento
@@ -118,16 +111,13 @@ func handlePontoDeRecarga(logger *logger.Logger, connectionStore *store.Connecti
 		var consumoTotal, valor float64
 		var pontoID int
 
-		// O id do ponto
 		pontoID = id
 
-		// Extrair placa do veículo e demais informações com um único método
-		// Usar regex ou sscanf de forma mais robusta
-		n, err := fmt.Sscanf(mensagem.Conteudo, "Veículo %s atendido. Consumo: %f kWh, Valor: R$ %f",
+		n, err := fmt.Sscanf(mensagem.Conteudo, "Veiculo %s atendido. Consumo: %f kWh, Valor: R$ %f",
 			&placaVeiculo, &consumoTotal, &valor)
 
 		if err != nil || n != 3 {
-			logger.Erro(fmt.Sprintf("Erro ao extrair informações da recarga: %v (itens extraídos: %d)", err, n))
+			logger.Erro(fmt.Sprintf("Erro ao extrair informacoes da recarga: %v (itens extraídos: %d)", err, n))
 
 			// Método alternativo de extração como fallback
 			if strings.Contains(mensagem.Conteudo, "Veículo") {
@@ -189,7 +179,7 @@ func handlePontoDeRecarga(logger *logger.Logger, connectionStore *store.Connecti
 			// Usar uma goroutine para não bloquear
 			go func() {
 				msgVeiculo := dataJson.Mensagem{
-					Tipo:     "recarga-finalizada", // IMPORTANTE: usar o tipo que o veículo está esperando
+					Tipo:     "recarga-finalizada",
 					Conteudo: mensagem.Conteudo,
 					Origem:   "servidor",
 				}
@@ -208,11 +198,9 @@ func handlePontoDeRecarga(logger *logger.Logger, connectionStore *store.Connecti
 	}
 }
 
-// Função para lidar com mensagens de veículos
 func handleVeiculo(logger *logger.Logger, connectionStore *store.ConnectionStore, conexao net.Conn, mensagem dataJson.Mensagem) {
 	switch mensagem.Tipo {
 	case "identificacao":
-		// Extrair placa do conteúdo da mensagem
 		var placa string
 		if strings.Contains(mensagem.Conteudo, "placa") {
 			parts := strings.Split(mensagem.Conteudo, "placa ")
@@ -220,7 +208,7 @@ func handleVeiculo(logger *logger.Logger, connectionStore *store.ConnectionStore
 				placa = strings.Split(parts[1], " ")[0]
 				logger.Info(fmt.Sprintf("Novo veículo placa %s conectado: (%s)", placa, conexao.RemoteAddr()))
 
-				// Armazenar a placa do veículo (modificar para passar a placa corretamente)
+				// Armazenar a placa do veículo
 				connectionStore.AddVeiculo(conexao, placa)
 
 				// Salvar a placa no JSON de veículos
@@ -238,19 +226,13 @@ func handleVeiculo(logger *logger.Logger, connectionStore *store.ConnectionStore
 		}
 
 	case "get-recarga":
-		// Processar solicitação de recarga em goroutine para não bloquear
-		go processarSolicitacaoRecarga(logger, connectionStore, conexao)
+		go processarSolicitacaoRecarga(logger, conexao)
 
 	case "localizacao":
-		// Processar localização e enviar ranking em goroutine
 		go processarLocalizacao(logger, connectionStore, conexao, mensagem)
 
 	case "solicitar-reserva":
-		// Processar reserva em goroutine
 		go processarReserva(logger, connectionStore, conexao, mensagem)
-
-	case "consultar_pagamento":
-		logger.Info("Em breve consulta disponivel")
 
 	case "veiculo-chegou":
 		// Veículo informou que chegou ao ponto de recarga
@@ -375,8 +357,7 @@ func handleVeiculo(logger *logger.Logger, connectionStore *store.ConnectionStore
 	}
 }
 
-// Função para processar solicitação de recarga
-func processarSolicitacaoRecarga(logger *logger.Logger, connectionStore *store.ConnectionStore, conexao net.Conn) {
+func processarSolicitacaoRecarga(logger *logger.Logger, conexao net.Conn) {
 	solicitacao := dataJson.Mensagem{
 		Tipo:     "get-localizacao",
 		Conteudo: "Ola Veiculo! Informe sua localizacao atual.",
@@ -400,9 +381,10 @@ func processarSolicitacaoRecarga(logger *logger.Logger, connectionStore *store.C
 		}
 		return
 	}
+
 }
 
-// Função para processar localização e enviar ranking
+// processar localização e enviar ranking
 func processarLocalizacao(logger *logger.Logger, connectionStore *store.ConnectionStore, conexao net.Conn, mensagem dataJson.Mensagem) {
 	var latitude, longitude float64
 	_, erro := fmt.Sscanf(mensagem.Conteudo, "%f,%f", &latitude, &longitude)
@@ -412,13 +394,11 @@ func processarLocalizacao(logger *logger.Logger, connectionStore *store.Connecti
 	}
 	logger.Info(fmt.Sprintf("Localizacao recebida: Latitude %f, Longitude %f", latitude, longitude))
 
-	// Logs detalhados para depuração
 	logger.Info("Calculando ranking dos pontos de recarga...")
 
 	// Calcular ranking
 	ranking := calcularRankingPontos(logger, latitude, longitude, connectionStore)
 
-	// Log do ranking calculado com detalhes de cada ponto
 	for i, ponto := range ranking {
 		logger.Info(fmt.Sprintf("Ranking[%d]: ID=%d, Distância=%.2f, Fila=%d, Score=%.2f",
 			i, ponto.ID, ponto.Distancia, ponto.Fila, ponto.Score))
@@ -427,7 +407,6 @@ func processarLocalizacao(logger *logger.Logger, connectionStore *store.Connecti
 	// Enviar ranking ao veículo
 	logger.Info("Enviando ranking ao veículo...")
 
-	// Criar a mensagem de ranking
 	var rankingStr string
 	for i, ponto := range ranking {
 		// Modificar a exibição da fila para não mostrar '999' ao usuário
@@ -462,7 +441,6 @@ func processarLocalizacao(logger *logger.Logger, connectionStore *store.Connecti
 	logger.Erro("Falha ao enviar ranking após várias tentativas")
 }
 
-// Função para processar reserva
 func processarReserva(logger *logger.Logger, connectionStore *store.ConnectionStore, conexao net.Conn, mensagem dataJson.Mensagem) {
 	pontoID, _ := strconv.Atoi(mensagem.Conteudo)
 	logger.Info(fmt.Sprintf("Reserva solicitada para ponto ID %d", pontoID))
@@ -484,14 +462,13 @@ func processarReserva(logger *logger.Logger, connectionStore *store.ConnectionSt
 		return
 	}
 
-	// NOVO: Verificar o tamanho da fila antes de enviar a solicitação
 	filaAtual := verificarFilaPontoEspecifico(logger, pontoCon, pontoID)
 	logger.Info(fmt.Sprintf("Verificação em tempo real: Ponto ID %d tem %d veículos na fila", pontoID, filaAtual))
 
 	// Enviar solicitação para o ponto
 	msgPonto := dataJson.Mensagem{
 		Tipo:     "nova-solicitacao",
-		Conteudo: placa, // Agora envia a placa em vez do endereço
+		Conteudo: placa,
 		Origem:   "servidor",
 	}
 
@@ -528,7 +505,7 @@ func processarReserva(logger *logger.Logger, connectionStore *store.ConnectionSt
 	}()
 
 	// Determinar a posição na fila com valor padrão
-	posicaoFila := filaAtual + 1 // Valor inicial agora baseado na verificação em tempo real
+	posicaoFila := filaAtual + 1
 	var mensagemStatus string
 
 	select {
@@ -566,11 +543,9 @@ func processarReserva(logger *logger.Logger, connectionStore *store.ConnectionSt
 		time.Sleep(100 * time.Millisecond)
 	}
 
-	// NOVO: Iniciar monitoramento contínuo da fila para este veículo
 	go monitorarFilaParaVeiculo(logger, connectionStore, pontoCon, conexao, placa, pontoID)
 }
 
-// Nova função para verificar a fila de um ponto específico em tempo real
 func verificarFilaPontoEspecifico(logger *logger.Logger, pontoCon net.Conn, pontoID int) int {
 	resp := disponibilidadePonto(logger, pontoCon, pontoID)
 
@@ -587,7 +562,6 @@ func verificarFilaPontoEspecifico(logger *logger.Logger, pontoCon net.Conn, pont
 	return tamanhoFila
 }
 
-// Nova função para monitorar continuamente a fila para um veículo específico
 func monitorarFilaParaVeiculo(logger *logger.Logger, connectionStore *store.ConnectionStore,
 	pontoCon net.Conn, veiculoCon net.Conn, placa string, pontoID int) {
 	// Monitorar por no máximo 10 minutos
@@ -613,12 +587,8 @@ func monitorarFilaParaVeiculo(logger *logger.Logger, connectionStore *store.Conn
 			tamanhoFila := verificarFilaPontoEspecifico(logger, pontoCon, pontoID)
 
 			// Calcular posição estimada do veículo
-			// Esta lógica precisa ser adaptada conforme a estrutura exata da fila no ponto de recarga
 			resp := disponibilidadePonto(logger, pontoCon, pontoID)
 			if resp.Tipo == "disponibilidade" {
-				// Aqui você pode implementar uma lógica mais complexa para determinar
-				// a posição exata do veículo na fila, se o ponto fornecer essa informação
-
 				// Enviar atualização ao veículo
 				msgAtualizar := dataJson.Mensagem{
 					Tipo: "posicao-fila",
@@ -677,9 +647,6 @@ func calcDistancia(latVeiculo float64, lonVeiculo float64, totalPontos int) (map
 	return mapDistancias, nil
 }
 
-// Substitua a função consultarDisponibilidadePontos por esta versão que usa goroutines:
-
-// Consulta a disponibilidade (tamanho da fila) de todos os pontos conectados
 func consultarDisponibilidadePontos(logger *logger.Logger, connectionStore *store.ConnectionStore) map[int]int {
 	filas := make(map[int]int)
 	var mutex sync.Mutex // Para proteger o mapa de filas durante acessos concorrentes
@@ -768,8 +735,6 @@ func consultarDisponibilidadePontos(logger *logger.Logger, connectionStore *stor
 	return filas
 }
 
-// Melhorar a função calcularRankingPontos para priorizar pontos com filas menores:
-
 func calcularRankingPontos(logger *logger.Logger, latVeiculo, lonVeiculo float64, connectionStore *store.ConnectionStore) []PontoRanking {
 	// Calcular distâncias
 	mapDistancias, _ := calcDistancia(latVeiculo, lonVeiculo, connectionStore.GetTotalPontosConectados())
@@ -786,20 +751,18 @@ func calcularRankingPontos(logger *logger.Logger, latVeiculo, lonVeiculo float64
 		}
 
 		// Calcular score (menor é melhor)
-		// Ajustar os pesos para dar mais importância à fila
-		// Filas grandes têm um impacto muito maior no score
 		pesoFila := 0.6
 		pesoDistancia := 0.4
 
-		// Score baseado na distância (normalizada para valores entre 0-10)
+		// Score baseado na distância (valores entre 0-10)
 		scoreDistancia := math.Min(distancia, 10.0) * pesoDistancia
 
-		// Score baseado na fila (com penalidade exponencial para filas grandes)
+		// Score baseado na fila (com penalidade para filas grandes)
 		var scoreFila float64
 		if tamanhoFila <= 3 {
 			scoreFila = float64(tamanhoFila) * pesoFila
 		} else {
-			// Penalidade exponencial para filas maiores que 3
+			// Penalidade para filas maiores que 3
 			scoreFila = (3.0 + math.Pow(float64(tamanhoFila-3), 1.5)) * pesoFila
 		}
 
@@ -888,7 +851,7 @@ func disponibilidadePonto(logger *logger.Logger, conexao net.Conn, id int) dataJ
 	case erro := <-errChan:
 		logger.Erro(fmt.Sprintf("Erro ao receber disponibilidade do ponto id (%d): %v", id, erro))
 		return dataJson.Mensagem{}
-	case <-time.After(4 * time.Second): // Aumentar de 2 para 4 segundos
+	case <-time.After(4 * time.Second):
 		logger.Erro(fmt.Sprintf("Timeout ao receber disponibilidade do ponto id (%d)", id))
 		return dataJson.Mensagem{}
 	}
