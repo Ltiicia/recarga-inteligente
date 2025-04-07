@@ -1,9 +1,10 @@
-Este projeto foi desenvolvido para facilitar a comunicação eficiente entre veículos elétricos e pontos de recarga. Utilizando uma arquitetura cliente-servidor baseada no protocolo TCP/IP, o sistema permite que veículos solicitem recargas, informem sua localização atual e recebam recomendações para pontos de recarga próximos.  
+<h2 align="center">Recarga de carros elétricos inteligente</h2>
+<h4 align="center">Projeto da disciplina TEC502 - Concorrência e Conectividade.</h4>
 
-O objetivo é otimizar o processo de recarga, garantindo eficiência e gerenciamento adequado da concorrência.  
+<p align="center">Este projeto foi desenvolvido para facilitar a comunicação entre veículos elétricos e pontos de recarga. Utilizando uma arquitetura cliente-servidor baseada no protocolo TCP/IP, o sistema permite que veículos solicitem recargas, informem sua localização atual gerada de forma randômica e recebam recomendações para pontos de recarga próximos.</p>
+<p align="center">Cujo objetivo é otimizar o processo de recarga, garantindo eficiência e gerenciamento adequado da concorrência.</p>
 
 ---
-
 ## Sumário
 
 - [Introdução](#introdução)
