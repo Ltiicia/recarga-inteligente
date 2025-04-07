@@ -3,7 +3,7 @@
 
 <p align="center">Este projeto foi desenvolvido para facilitar a comunicação entre veículos elétricos e pontos de recarga. Utilizando uma arquitetura cliente-servidor baseada no protocolo TCP/IP, o sistema permite que veículos solicitem recargas, informem sua localização atual gerada de forma randômica e recebam recomendações para pontos de recarga próximos.</p>
 <p align="center">O objetivo é otimizar o processo de recarga, garantindo eficiência e gerenciamento adequado da concorrência.</p>
----
+
 ## Sumário
 
 - [Introdução](#introdução)
@@ -15,7 +15,6 @@
 - ...
 - [Referências](#referências)
 
----
 ## Introdução
 
 O presente sistema foi desenvolvido para implementar comunicação entre cliente-servidor simulando o contexto de recarga de veículos elétricos. O projeto viabiliza a solicitação e gestão de recargas por parte dos veículos, utilizando o protocolo TCP/IP e desenvolvimento em Go, com suporte para múltiplas conexões simultâneas.  
