@@ -19,7 +19,9 @@ O objetivo é otimizar o processo de recarga, garantindo eficiência e gerenciam
 
 ## Introdução
 
-Com o aumento da adesão aos veículos elétricos, surge a necessidade de sistemas eficientes que gerenciem a comunicação entre esses veículos e os pontos de recarga. O presente sistema foi desenvolvido para atender a essa demanda, proporcionando uma solução que permite aos veículos encontrar, reservar e utilizar pontos de recarga de forma otimizada, considerando fatores como proximidade e disponibilidade.
+O presente sistema foi desenvolvido para implementar comunicação entre cliente-servidor simulando o contexto de recarga de veículos elétricos. O projeto viabiliza a solicitação e gestão de recargas por parte dos veículos, utilizando o protocolo TCP/IP e desenvolvimento em Go, com suporte para múltiplas conexões simultâneas.
+
+A aplicação está contida em containers Docker, que isolam e orquestram a execução dos serviços. Onde o servidor gerencia os pontos de recarga disponíveis, recebe solicitações dos veículos, calcula distâncias, gerencia as filas e administra as reservas. Ele é responsável por validar as transações de recarga, verificando a disponibilidade dos pontos, e tratando o armazenamento das informações. O veículo, por sua vez, permite ao usuário solicitar recargas, informa sua localização atual para consultar pontos de recarga disponíveis e escolher onde realizar a operação. Já o ponto de recarga, é responsável por conectar-se ao servidor, informar sua disponibilidade ou fila de espera e gerenciar localmente sua própria fila de recargas. Ao receber uma reserva, o ponto de recarga processa o atendimento do veículo, atualiza sua fila e libera o ponto após a conclusão do carregamento.Porcionando então, uma solução que permite aos veículos encontrar, reservar e utilizar pontos de recarga de forma otimizada, considerando fatores como proximidade e disponibilidade.
 
 ---
 
