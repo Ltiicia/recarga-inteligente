@@ -26,16 +26,6 @@ A aplicação está contida em containers Docker, que isolam e orquestram a exec
 
 Porcionando então, uma solução que permite aos veículos encontrar, reservar e utilizar pontos de recarga de forma otimizada, considerando fatores como proximidade e disponibilidade.  
 
-## Funcionalidades
-
-- **Solicitação de Recarga**: O veículo pode solicitar uma recarga ao servidor.
-- **Envio de Localização**: O servidor solicita e recebe a localização atual do veículo, gerada aleatoriamente.
-- **Consulta de Disponibilidade**: O servidor consulta os pontos de recarga conectados sobre sua disponibilidade ou fila de espera.
-- **Cálculo de Distância**: O servidor calcula a distância entre o veículo e os pontos de recarga disponíveis.
-- **Reserva de Ponto de Recarga**: O veículo recebe as opções e seleciona o ponto desejado.
-- **Gerenciamento de Fila**: O servidor efetua a reserva adicionando o veículo à fila do ponto de recarga escolhido.
-- **Finalização e Liberação**: O veículo é removido da fila ao final da recarga e recebe o valor para pagamento.
-
 ## Arquitetura do Sistema
 
 A solução foi desenvolvida utilizando a arquitetura de comunicação cliente-servidor, onde a comunicação entre as partes ocorre por meio do protocolo Transmission Control Protocol (TCP). Seu uso garante a integridade e ordem dos pacotes proporcionando uma comunicação confiável entre os módulos do sistema: servidor, veículos e pontos de recarga. 
@@ -89,20 +79,37 @@ A comunicação entre as partes ocorre via **sockets TCP/IP** conforme ilustraç
 - Ponto remove o veículo da sua fila ao final da recarga.
 - O valor da recarga é vinculado ao veículo.
 
+### Funcionalidades Principais
+
+- **Solicitação de Recarga**: O veículo pode solicitar uma recarga ao servidor.
+- **Envio de Localização**: O servidor solicita e recebe a localização atual do veículo, gerada aleatoriamente.
+- **Consulta de Disponibilidade**: O servidor consulta os pontos de recarga conectados sobre sua disponibilidade ou fila de espera.
+- **Cálculo de Distância**: O servidor calcula a distância entre o veículo e os pontos de recarga disponíveis.
+- **Reserva de Ponto de Recarga**: O veículo recebe as opções e seleciona o ponto desejado.
+- **Gerenciamento de Fila**: O servidor efetua a reserva adicionando o veículo à fila do ponto de recarga escolhido.
+- **Finalização e Liberação**: O veículo é removido da fila ao final da recarga e recebe o valor para pagamento.
+
 ## Protocolo de Comunicação
+A comunicação entre os clientes e o servidor é baseada em mensagens JSON transmitidas via sockets TCP. O formato JSON foi escolhido por ser leve, legível e amplamente adotado em sistemas distribuídos. Cada mensagem permite a troca de informações, dados, além de encapsular ações como identificação, requisição de recarga, resposta de disponibilidade, reservas, entre outros.
+
+## Conexões Simultâneas
+O servidor foi projetado para suportar múltiplas conexões simultâneas utilizando goroutines, nativas da linguagem Go. A cada nova conexão, uma nova goroutine é iniciada, permitindo que o servidor processe requisições de forma paralela e responsiva, sem bloquear outras conexões, maximizando a escalabilidade do sistema e garantindo que a resposta a uma solicitação de recarga, por exemplo, não afete outras conexões ativas.
+
+## Gerenciamento de Concorrência
+Para garantir a integridade dos dados durante operações concorrentes como por exemplo a inserção em filas de espera para reserva de recargas, foi implementado o uso de mutexes. O controle de exclusão mútua assegura que múltiplas goroutines não modifiquem simultaneamente estruturas de dados compartilhadas, como a fila de espera de um ponto de recarga.  
+
+Funcionamento:  
+- Lock: Antes da operação crítica, a goroutine realiza um mutex.Lock().  
+- Seção Crítica: Os dados são validados e atualizados de forma segura.
+- Unlock: Após a operação, o mutex é liberado com mutex.Unlock(), permitindo que outras goroutines prossigam.  
+
+Essa abordagem evita problemas como múltiplos veículos tentando ocupar a mesma posição na fila de reservas de um determinado ponto de recarga.
+
 
 ### Execução com Docker
 A simulação do sistema é feita utilizando docker-compose, com containers para o Servidor, os Pontos de recarga e os Veículos. O Docker Compose permite aos módulos compartilhar uma rede interna privada, proporcionando a troca de mensagens TCP entre os containers.
 
----
 
-
-
-
-...
-
-## Gerenciamento de Concorrência
-...
 
 ## Tecnologias Utilizadas
 - Linguagem: Go (Golang)
