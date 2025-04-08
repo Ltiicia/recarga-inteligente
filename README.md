@@ -7,9 +7,9 @@
 ## Sumário
 
 - [Introdução](#introdução)
-- [Funcionalidades](#funcionalidades)
 - [Arquitetura do Sistema](#arquitetura-do-sistema)
 - [Protocolo de Comunicação](#protocolo-de-comunicação)
+- [Conexões Simultâneas](#conexões-simultâneas)
 - [Gerenciamento de Concorrência](#gerenciamento-de-concorrência)
 - [Como Executar](#como-executar)
 - ...
@@ -119,15 +119,15 @@ Ao solicitar uma recarga, o veículo envia sua localização atual ao servidor. 
 
 Após a escolha da opção desejada, o veículo é adicionado à fila do ponto selecionado. Para garantir a integridade da operação, cada etapa é realizada com controle de concorrência utilizando mutexes e channels, impedindo que dois veículos reservem a mesma posição simultaneamente.
 
-### Execução com Docker
+## Execução com Docker
 A simulação do sistema é feita utilizando Docker-Compose, com containers para o Servidor, os Pontos de recarga e os Veículos. O Docker Compose permite as partes do sistema compartilhar uma rede interna privada, proporcionando a troca de mensagens TCP entre os containers.  
 
 A imagem Docker do sistema é construída com base nos Dockerfiles que inclui as dependências necessárias, mantendo o ambiente leve e eficiente.
 
 ## Tecnologias Utilizadas
 - Linguagem: Go (Golang)
-- Comunicação: TCP/IP com net.Conn
-- Contêineres: Docker, Docker Compose
+- Comunicação: sockets TCP/IP
+- Execução: Docker, Docker Compose
 - Mock de dados: JSON
 
 ## Como Executar
