@@ -393,23 +393,6 @@ func processarReserva(logger *logger.Logger, connectionStore *store.ConnectionSt
 	go monitorarFilaParaVeiculo(logger, connectionStore, conexao, placa, pontoID)
 }
 
-func verificarFilaPontoEspecifico(logger *logger.Logger, connectionStore *store.ConnectionStore, pontoID int) int {
-	resp := disponibilidadePonto(logger, connectionStore, pontoID)
-	//logger.Info(fmt.Sprintf("disponibilidade recebida em verificarFilaPontoEspecifico: %s", resp.Conteudo))
-
-	// Extrair o tamanho da fila da resposta
-	var tamanhoFila int = 0
-	if resp.Tipo == "disponibilidade" {
-		if strings.Contains(resp.Conteudo, "sem fila") {
-			tamanhoFila = 0
-		} else {
-			//fmt.Sscanf(resp.Conteudo, "Situacao atual: com %d na fila", &tamanhoFila)
-		}
-	}
-
-	return tamanhoFila
-}
-
 func monitorarFilaParaVeiculo(logger *logger.Logger, connectionStore *store.ConnectionStore, veiculoCon net.Conn, placa string, pontoID int) {
 	// Monitorar por no máximo 10 minutos
 	timeout := time.After(10 * time.Minute)

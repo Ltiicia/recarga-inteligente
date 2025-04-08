@@ -2,7 +2,7 @@ services:
   servidor:
     build: 
       context: .
-      dockerfile: /cmd/servidor/Dockerfile
+      dockerfile: ./cmd/servidor/Dockerfile
     container_name: servidor-ct
     ports:
       - "5000:5000" #http://localhost:5000
@@ -15,7 +15,7 @@ services:
   veiculo:
     build: 
       context: .
-      dockerfile: /cmd/veiculo/Dockerfile
+      dockerfile: ./cmd/veiculo/Dockerfile
     container_name: veiculo-ct
     depends_on:
       - servidor
@@ -30,7 +30,7 @@ services:
   ponto-de-recarga:
     build: 
       context: .
-      dockerfile: /cmd/ponto-de-recarga/Dockerfile
+      dockerfile: ./cmd/ponto-de-recarga/Dockerfile
     container_name: ponto-de-recarga-ct
     depends_on:
       - servidor
