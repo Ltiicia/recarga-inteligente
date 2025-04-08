@@ -16,26 +16,21 @@ import (
 	"time"
 )
 
-// Adicionar depois das importações
 type PontoRanking struct {
 	ID        int
 	Distancia float64
 	Fila      int
-	Score     float64 // Score combinado de distância e fila
+	Score     float64
 }
-
-// Adicionar após as definições de tipo no início do arquivo:
 
 var (
 	reservasAtivas = make(map[string]int) // mapa de placa -> pontoID
 	reservasMutex  sync.Mutex
 )
 
-// Modifique o método HandleConnection para processar mensagens em goroutines separadas
-
+// ok
 func HandleConnection(conexao net.Conn, connectionStore *store.ConnectionStore, logger *logger.Logger) {
 	defer connectionStore.RemoveConnection(conexao)
-
 	on := true
 	for on {
 		//recebe mensagem inicial
@@ -66,6 +61,7 @@ func HandleConnection(conexao net.Conn, connectionStore *store.ConnectionStore, 
 }
 
 func handlePontoDeRecarga(logger *logger.Logger, connectionStore *store.ConnectionStore, conexao net.Conn, mensagem dataJson.Mensagem) {
+
 	if mensagem.Tipo == "identificacao" {
 		idPonto := connectionStore.AddPontoRecarga(conexao)
 		if idPonto == -1 {
@@ -76,7 +72,7 @@ func handlePontoDeRecarga(logger *logger.Logger, connectionStore *store.Connecti
 		logger.Info(fmt.Sprintf("Novo ponto de recarga conectado id: (%d)", idPonto))
 
 		// Solicitar disponibilidade inicial
-		disponibilidade := disponibilidadePonto(logger, conexao, idPonto)
+		disponibilidade := disponibilidadePonto(logger, connectionStore, idPonto)
 		logger.Info(fmt.Sprintf("Disponibilidade inicial do Ponto id (%d) recebida: %s", idPonto, disponibilidade.Conteudo))
 		return
 	}
@@ -198,7 +194,439 @@ func handlePontoDeRecarga(logger *logger.Logger, connectionStore *store.Connecti
 	}
 }
 
+// ok
+func disponibilidadePonto(logger *logger.Logger, connectionStore *store.ConnectionStore, pontoId int) dataJson.Mensagem {
+	fila := connectionStore.GetFilaPorPonto(pontoId)
+	conexaoPonto := connectionStore.GetConexaoPorID(pontoId)
+	filaJSON, err := json.Marshal(fila)
+	if err != nil {
+		logger.Erro(fmt.Sprintf("Erro ao serializar fila do ponto %d: %v", pontoId, err))
+	} else {
+		msgFila := dataJson.Mensagem{
+			Tipo:     "atualizar-fila",
+			Conteudo: string(filaJSON),
+			Origem:   "servidor",
+		}
+		err = dataJson.SendMessage(conexaoPonto, msgFila)
+		if err != nil {
+			logger.Erro(fmt.Sprintf("Erro ao enviar fila para ponto %d: %v", pontoId, err))
+		} else {
+			logger.Info(fmt.Sprintf("Fila Recebida do ponto %d com sucesso", pontoId))
+		}
+	}
+
+	solicitacao := dataJson.Mensagem{
+		Tipo:     "get-disponibilidade",
+		Conteudo: fmt.Sprintf("Ola ponto de recarga id (%d)! Informe sua disponibilidade / fila", pontoId),
+		Origem:   "servidor",
+	}
+	erro := dataJson.SendMessage(conexaoPonto, solicitacao)
+	if erro != nil {
+		logger.Erro(fmt.Sprintf("Erro ao solicitar disponibilidade ao ponto-de-recarga id (%d): %v", pontoId, erro))
+		return dataJson.Mensagem{}
+	}
+
+	disponibilidade := connectionStore.GetFilaPorPonto(pontoId)
+
+	status := "Situacao atual: "
+	if len(disponibilidade) == 0 {
+		status += "sem fila"
+	} else {
+		status += fmt.Sprintf("com %d na fila", len(disponibilidade))
+	}
+
+	msg := dataJson.Mensagem{
+		Tipo:     "disponibilidade",
+		Conteudo: status,
+		Origem:   "ponto-de-recarga",
+	}
+
+	return msg
+}
+
+// ok
+func processarLocalizacao(logger *logger.Logger, connectionStore *store.ConnectionStore, conexao net.Conn, mensagem dataJson.Mensagem) {
+	var latitude, longitude float64
+	_, erro := fmt.Sscanf(mensagem.Conteudo, "%f,%f", &latitude, &longitude)
+	if erro != nil {
+		logger.Erro(fmt.Sprintf("Erro ao receber localizacao: %v", erro))
+		return
+	}
+	logger.Info(fmt.Sprintf("Localizacao recebida: Latitude %f, Longitude %f", latitude, longitude))
+
+	logger.Info("Calculando ranking dos pontos de recarga...")
+
+	// Calcular ranking
+	ranking := calcularRankingPontos(logger, latitude, longitude, connectionStore)
+
+	for i, ponto := range ranking {
+		logger.Info(fmt.Sprintf("Ranking[%d]: ID=%d, Distância=%.2f, Fila=%d, Score=%.2f",
+			i, ponto.ID, ponto.Distancia, ponto.Fila, ponto.Score))
+	}
+
+	// Enviar ranking ao veículo
+	logger.Info("Enviando ranking ao veículo...")
+
+	var rankingStr string
+	for i, ponto := range ranking {
+		// Modificar a exibição da fila para não mostrar '999' ao usuário
+		filaExibicao := ponto.Fila
+		if filaExibicao == 999 {
+			filaExibicao = 0 // Mostrar como 0 para o usuário quando não temos informação
+		}
+
+		rankingStr += fmt.Sprintf("%d. Ponto ID: %d, Distância: %.2f km, Fila: %d veículos\n",
+			i+1, ponto.ID, ponto.Distancia, filaExibicao)
+	}
+
+	msg := dataJson.Mensagem{
+		Tipo:     "ranking-pontos",
+		Conteudo: rankingStr,
+		Origem:   "servidor",
+	}
+
+	// Tentar enviar a mensagem com retry
+	maxRetries := 3
+	for i := 0; i < maxRetries; i++ {
+		erro = dataJson.SendMessage(conexao, msg)
+		if erro == nil {
+			logger.Info("Ranking enviado com sucesso ao veículo")
+			return
+		}
+
+		logger.Erro(fmt.Sprintf("Tentativa %d: Erro ao enviar ranking ao veículo: %v", i+1, erro))
+		time.Sleep(500 * time.Millisecond) // Aguardar antes de tentar novamente
+	}
+
+	logger.Erro("Falha ao enviar ranking após várias tentativas")
+}
+
+//
+
+func processarReserva(logger *logger.Logger, connectionStore *store.ConnectionStore, conexao net.Conn, mensagem dataJson.Mensagem) {
+	pontoID, _ := strconv.Atoi(mensagem.Conteudo)
+	logger.Info(fmt.Sprintf("Reserva solicitada para ponto ID %d", pontoID))
+
+	// Obter placa do veículo
+	placa := connectionStore.GetVeiculoPlaca(conexao)
+
+	// Encontrar a conexão do ponto pelo ID
+	pontoCon := connectionStore.GetConexaoPorID(pontoID)
+	if pontoCon == nil {
+		logger.Erro(fmt.Sprintf("Ponto ID %d não encontrado", pontoID))
+		// Informar ao veículo que a reserva falhou
+		msg := dataJson.Mensagem{
+			Tipo:     "reserva-falhou",
+			Conteudo: fmt.Sprintf("Ponto ID %d não encontrado", pontoID),
+			Origem:   "servidor",
+		}
+		dataJson.SendMessage(conexao, msg)
+		return
+	}
+
+	filaAtual := connectionStore.GetFilaPorPonto(pontoID)
+	logger.Info(fmt.Sprintf("Verificação em tempo real: Ponto ID %d tem %d veículos na fila", pontoID, len(filaAtual)+1))
+
+	// Enviar solicitação para o ponto
+	msgPonto := dataJson.Mensagem{
+		Tipo:     "nova-solicitacao",
+		Conteudo: placa,
+		Origem:   "servidor",
+	}
+
+	erro := dataJson.SendMessage(pontoCon, msgPonto)
+	if erro != nil {
+		logger.Erro(fmt.Sprintf("Erro ao enviar solicitação ao ponto: %v", erro))
+
+		// Notificar o veículo sobre a falha mesmo em caso de erro
+		msgFalha := dataJson.Mensagem{
+			Tipo:     "reserva-falhou",
+			Conteudo: fmt.Sprintf("Falha ao comunicar com o ponto ID %d", pontoID),
+			Origem:   "servidor",
+		}
+		dataJson.SendMessage(conexao, msgFalha)
+		return
+	}
+
+	// Registrar a reserva temporariamente em memória
+	reservasMutex.Lock()
+	reservasAtivas[placa] = pontoID
+	reservasMutex.Unlock()
+
+	// Consulta a fila diretamente no servidor
+	fila := connectionStore.GetFilaPorPonto(pontoID)
+	posicaoFila := len(fila) + 1 // Posição padrão se o veículo ainda não estiver na fila
+
+	// Verifica a posição real do veículo (placa)
+	for i, v := range fila {
+		if v.Placa == placa {
+			posicaoFila = i + 1
+			break
+		}
+	}
+
+	var mensagemStatus string
+	// Sempre enviar uma mensagem ao veículo, independente do resultado
+	if posicaoFila <= 1 {
+		mensagemStatus = fmt.Sprintf("Reserva confirmada para ponto ID %d. Você é o próximo a ser atendido!", pontoID)
+	} else {
+		mensagemStatus = fmt.Sprintf("Reserva confirmada para ponto ID %d. Você está na posição %d da fila, aguarde sua vez.", pontoID, posicaoFila)
+	}
+
+	msgConfirmacao := dataJson.Mensagem{
+		Tipo:     "reserva-confirmada",
+		Conteudo: mensagemStatus,
+		Origem:   "servidor",
+	}
+
+	// Tentar enviar várias vezes se necessário
+	maxTentativas := 3
+	for i := 0; i < maxTentativas; i++ {
+		err := dataJson.SendMessage(conexao, msgConfirmacao)
+		if err == nil {
+			break
+		}
+		logger.Erro(fmt.Sprintf("Tentativa %d: Erro ao enviar confirmação ao veículo: %v", i+1, err))
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	go monitorarFilaParaVeiculo(logger, connectionStore, conexao, placa, pontoID)
+}
+
+func verificarFilaPontoEspecifico(logger *logger.Logger, connectionStore *store.ConnectionStore, pontoID int) int {
+	resp := disponibilidadePonto(logger, connectionStore, pontoID)
+	logger.Info(fmt.Sprintf("disponibilidade recebida em verificarFilaPontoEspecifico: %s", resp.Conteudo))
+
+	// Extrair o tamanho da fila da resposta
+	var tamanhoFila int = 0
+	if resp.Tipo == "disponibilidade" {
+		if strings.Contains(resp.Conteudo, "sem fila") {
+			tamanhoFila = 0
+		} else {
+			fmt.Sscanf(resp.Conteudo, "Situacao atual: com %d na fila", &tamanhoFila)
+		}
+	}
+
+	return tamanhoFila
+}
+
+func monitorarFilaParaVeiculo(logger *logger.Logger, connectionStore *store.ConnectionStore, veiculoCon net.Conn, placa string, pontoID int) {
+	// Monitorar por no máximo 10 minutos
+	timeout := time.After(10 * time.Minute)
+	ticker := time.NewTicker(10 * time.Second)
+	defer ticker.Stop()
+
+	// Verificar se o veículo ainda está na fila e em qual posição
+	for {
+		select {
+		case <-ticker.C:
+			// Verificar se a reserva ainda existe
+			reservasMutex.Lock()
+			pontoReservado, existe := reservasAtivas[placa]
+			reservasMutex.Unlock()
+
+			if !existe || pontoReservado != pontoID {
+				logger.Info(fmt.Sprintf("Monitoramento finalizado para veículo %s - não possui mais reserva ativa", placa))
+				return
+			}
+
+			// Verificar a fila atual
+			tamanhoFila := verificarFilaPontoEspecifico(logger, connectionStore, pontoID)
+
+			// Calcular posição estimada do veículo
+			resp := disponibilidadePonto(logger, connectionStore, pontoID)
+			logger.Info(fmt.Sprintf("disponibilidade recebida em monitorarFilaParaVeiculo: %s", resp.Conteudo))
+
+			if resp.Tipo == "disponibilidade" {
+				// Enviar atualização ao veículo
+				msgAtualizar := dataJson.Mensagem{
+					Tipo: "posicao-fila",
+					Conteudo: fmt.Sprintf("Atualização: Você está na fila do ponto ID %d. Existem %d veículos na fila.",
+						pontoID, tamanhoFila),
+					Origem: "servidor",
+				}
+
+				// Não interromper o monitoramento se falhar ao enviar uma atualização
+				err := dataJson.SendMessage(veiculoCon, msgAtualizar)
+				if err != nil {
+					logger.Erro(fmt.Sprintf("Erro ao enviar atualização da fila para veículo %s: %v", placa, err))
+				}
+			}
+
+		case <-timeout:
+			logger.Info(fmt.Sprintf("Monitoramento de fila expirado para veículo %s", placa))
+			return
+		}
+	}
+}
+
+// ok
+func consultarDisponibilidadePontos(logger *logger.Logger, connectionStore *store.ConnectionStore) map[int]int {
+	filas := make(map[int]int)
+	var mutex sync.Mutex // Para proteger o mapa de filas durante acessos concorrentes
+
+	// Criar um WaitGroup para esperar todas as goroutines terminarem
+	var wg sync.WaitGroup
+
+	// Canal para timeout global da operação
+	timeout := time.After(5 * time.Second)
+
+	// Canal para receber os resultados das goroutines
+	resultados := make(chan struct {
+		id          int
+		tamanhoFila int
+	}, connectionStore.GetTotalPontosConectados())
+
+	// Para cada ponto de recarga conectado, consulta sua disponibilidade em uma goroutine separada
+	pontosMap := connectionStore.GetPontosMap()
+	for conexao, id := range pontosMap {
+		wg.Add(1)
+		go func(conexao net.Conn, id int) {
+			defer wg.Done()
+
+			// Criar um canal para timeout individual da consulta
+			consultaTimeout := time.After(2 * time.Second)
+
+			// Canal para receber a resposta da consulta
+			respChan := make(chan dataJson.Mensagem, 1)
+
+			// Fazer a consulta em uma goroutine
+			go func() {
+				resp := disponibilidadePonto(logger, connectionStore, id)
+				logger.Info(fmt.Sprintf("disponibilidade recebida em consultarDisponibilidadePontos: %s", resp.Conteudo))
+
+				if resp.Tipo == "disponibilidade" {
+					respChan <- resp
+				}
+			}()
+
+			// Esperar pela resposta ou timeout
+			select {
+			case resp := <-respChan:
+				// Extrair o número de veículos na fila da resposta
+				var tamanhoFila int
+				if strings.Contains(resp.Conteudo, "sem fila") {
+					tamanhoFila = 0
+				} else {
+					fmt.Sscanf(resp.Conteudo, "Situacao atual: com %d na fila", &tamanhoFila)
+				}
+
+				// Enviar o resultado para o canal principal
+				resultados <- struct {
+					id          int
+					tamanhoFila int
+				}{id, tamanhoFila}
+
+			case <-consultaTimeout:
+				logger.Erro(fmt.Sprintf("Timeout ao consultar disponibilidade do ponto ID %d", id))
+			}
+		}(conexao, id)
+	}
+
+	// Goroutine para fechar o canal de resultados quando todas as consultas terminarem
+	go func() {
+		wg.Wait()
+		close(resultados)
+	}()
+
+	// Coletar os resultados ou encerrar por timeout
+	done := false
+	for !done {
+		select {
+		case resultado, ok := <-resultados:
+			if !ok {
+				done = true // Canal fechado, todas as consultas terminaram
+				break
+			}
+			mutex.Lock()
+			filas[resultado.id] = resultado.tamanhoFila
+			mutex.Unlock()
+
+		case <-timeout:
+			logger.Erro("Timeout global ao consultar disponibilidade dos pontos")
+			done = true
+		}
+	}
+
+	return filas
+}
+
+// ok
+func calcDistancia(latVeiculo float64, lonVeiculo float64, totalPontos int) (map[int]float64, error) {
+	mapDistancias := make(map[int]float64)
+
+	for id := 1; id <= totalPontos; id++ {
+		ponto, erro := dataJson.GetPontoId(id)
+		if erro == 0 {
+			d := distancia.GetDistancia(latVeiculo, lonVeiculo, ponto.Latitude, ponto.Longitude)
+			km := d / 1000
+			mapDistancias[id] = km
+		} else if erro == 2 {
+			return mapDistancias, fmt.Errorf("ponto id (%d) nao localizado", id)
+		} else {
+			return mapDistancias, fmt.Errorf("Erro ao carregar arquivo json")
+		}
+	}
+	return mapDistancias, nil
+}
+
+// ok
+func calcularRankingPontos(logger *logger.Logger, latVeiculo, lonVeiculo float64, connectionStore *store.ConnectionStore) []PontoRanking {
+	// Calcular distâncias
+	mapDistancias, _ := calcDistancia(latVeiculo, lonVeiculo, connectionStore.GetTotalPontosConectados())
+
+	// Consultar tamanho das filas em tempo real
+	mapFilas := consultarDisponibilidadePontos(logger, connectionStore)
+
+	// Criar lista de pontos com seus scores
+	var pontos []PontoRanking
+	for id, distancia := range mapDistancias {
+		tamanhoFila, ok := mapFilas[id]
+		if !ok {
+			tamanhoFila = 999 // Valor alto para pontos sem informação de fila
+		}
+
+		// Calcular score (menor é melhor)
+		pesoFila := 0.6
+		pesoDistancia := 0.4
+
+		// Score baseado na distância (valores entre 0-10)
+		scoreDistancia := math.Min(distancia, 10.0) * pesoDistancia
+
+		// Score baseado na fila (com penalidade para filas grandes)
+		var scoreFila float64
+		if tamanhoFila <= 3 {
+			scoreFila = float64(tamanhoFila) * pesoFila
+		} else {
+			// Penalidade para filas maiores que 3
+			scoreFila = (3.0 + math.Pow(float64(tamanhoFila-3), 1.5)) * pesoFila
+		}
+
+		score := scoreDistancia + scoreFila
+
+		pontos = append(pontos, PontoRanking{
+			ID:        id,
+			Distancia: distancia,
+			Fila:      tamanhoFila,
+			Score:     score,
+		})
+	}
+
+	// Ordenar por score (menor é melhor)
+	sort.Slice(pontos, func(i, j int) bool {
+		return pontos[i].Score < pontos[j].Score
+	})
+
+	// Retornar até 3 melhores opções
+	if len(pontos) > 3 {
+		return pontos[:3]
+	}
+	return pontos
+}
+
+// ok
 func handleVeiculo(logger *logger.Logger, connectionStore *store.ConnectionStore, conexao net.Conn, mensagem dataJson.Mensagem) {
+
 	switch mensagem.Tipo {
 	case "identificacao":
 		var placa string
@@ -207,6 +635,16 @@ func handleVeiculo(logger *logger.Logger, connectionStore *store.ConnectionStore
 			if len(parts) > 1 {
 				placa = strings.Split(parts[1], " ")[0]
 				logger.Info(fmt.Sprintf("Novo veículo placa %s conectado: (%s)", placa, conexao.RemoteAddr()))
+
+				if connectionStore.PlacaJaEmUso(placa, conexao) {
+					msgErro := dataJson.Mensagem{
+						Tipo:     "placa-em-uso",
+						Conteudo: "Esta placa já está em uso por outro veículo.",
+						Origem:   "servidor",
+					}
+					dataJson.SendMessage(conexao, msgErro)
+					return
+				}
 
 				// Armazenar a placa do veículo
 				connectionStore.AddVeiculo(conexao, placa)
@@ -259,6 +697,7 @@ func handleVeiculo(logger *logger.Logger, connectionStore *store.ConnectionStore
 			logger.Erro(fmt.Sprintf("Ponto ID %d não encontrado para notificar sobre chegada do veículo %s", pontoID, placaVeiculo))
 			return
 		}
+		logger.Info(fmt.Sprintf("ponto %d conexao recebida %s", pontoID, pontoCon.RemoteAddr()))
 
 		msgPonto := dataJson.Mensagem{
 			Tipo:     "veiculo-chegou",
@@ -280,17 +719,12 @@ func handleVeiculo(logger *logger.Logger, connectionStore *store.ConnectionStore
 		// Verificar se a placa já está em uso em alguma conexão ativa
 		placaEmUso := false
 
-		// 1. Verificar nas conexões ativas
+		// Verificar nas conexões ativas
 		for _, placaAtiva := range connectionStore.GetTodasPlacasAtivas() {
 			if placaAtiva == placa {
 				placaEmUso = true
 				break
 			}
-		}
-
-		// 2. Verificar no arquivo JSON (para veículos que podem ter se desconectado)
-		if !placaEmUso {
-			placaEmUso = dataJson.PlacaJaExiste(placa)
 		}
 
 		// Enviar resposta
@@ -352,11 +786,33 @@ func handleVeiculo(logger *logger.Logger, connectionStore *store.ConnectionStore
 			logger.Info(fmt.Sprintf("Histórico enviado com sucesso para veículo %s", placa))
 		}
 
+	case "limpar-historico":
+		placa := connectionStore.GetVeiculoPlaca(conexao)
+		logger.Info(fmt.Sprintf("Veículo %s solicitou limpeza do histórico de recargas", placa))
+
+		err := dataJson.LimparHistoricoRecargas(placa)
+		if err != nil {
+			logger.Erro(fmt.Sprintf("Erro ao limpar histórico de %s: %v", placa, err))
+			dataJson.SendMessage(conexao, dataJson.Mensagem{
+				Tipo:     "erro-pagamento",
+				Conteudo: "Erro ao processar pagamento.",
+				Origem:   "servidor",
+			})
+			return
+		}
+
+		dataJson.SendMessage(conexao, dataJson.Mensagem{
+			Tipo:     "pagamento-confirmado",
+			Conteudo: "Histórico de recargas limpo com sucesso.",
+			Origem:   "servidor",
+		})
+
 	default:
 		logger.Erro(fmt.Sprintf("Tipo de solicitacao ainda nao foi mapeada - %s", mensagem.Tipo))
 	}
 }
 
+// ok
 func processarSolicitacaoRecarga(logger *logger.Logger, conexao net.Conn) {
 	solicitacao := dataJson.Mensagem{
 		Tipo:     "get-localizacao",
@@ -380,479 +836,5 @@ func processarSolicitacaoRecarga(logger *logger.Logger, conexao net.Conn) {
 			logger.Erro(fmt.Sprintf("Erro ao enviar dados da regiao: %v", erro))
 		}
 		return
-	}
-
-}
-
-// processar localização e enviar ranking
-func processarLocalizacao(logger *logger.Logger, connectionStore *store.ConnectionStore, conexao net.Conn, mensagem dataJson.Mensagem) {
-	var latitude, longitude float64
-	_, erro := fmt.Sscanf(mensagem.Conteudo, "%f,%f", &latitude, &longitude)
-	if erro != nil {
-		logger.Erro(fmt.Sprintf("Erro ao receber localizacao: %v", erro))
-		return
-	}
-	logger.Info(fmt.Sprintf("Localizacao recebida: Latitude %f, Longitude %f", latitude, longitude))
-
-	logger.Info("Calculando ranking dos pontos de recarga...")
-
-	// Calcular ranking
-	ranking := calcularRankingPontos(logger, latitude, longitude, connectionStore)
-
-	for i, ponto := range ranking {
-		logger.Info(fmt.Sprintf("Ranking[%d]: ID=%d, Distância=%.2f, Fila=%d, Score=%.2f",
-			i, ponto.ID, ponto.Distancia, ponto.Fila, ponto.Score))
-	}
-
-	// Enviar ranking ao veículo
-	logger.Info("Enviando ranking ao veículo...")
-
-	var rankingStr string
-	for i, ponto := range ranking {
-		// Modificar a exibição da fila para não mostrar '999' ao usuário
-		filaExibicao := ponto.Fila
-		if filaExibicao == 999 {
-			filaExibicao = 0 // Mostrar como 0 para o usuário quando não temos informação
-		}
-
-		rankingStr += fmt.Sprintf("%d. Ponto ID: %d, Distância: %.2f km, Fila: %d veículos\n",
-			i+1, ponto.ID, ponto.Distancia, filaExibicao)
-	}
-
-	msg := dataJson.Mensagem{
-		Tipo:     "ranking-pontos",
-		Conteudo: rankingStr,
-		Origem:   "servidor",
-	}
-
-	// Tentar enviar a mensagem com retry
-	maxRetries := 3
-	for i := 0; i < maxRetries; i++ {
-		erro = dataJson.SendMessage(conexao, msg)
-		if erro == nil {
-			logger.Info("Ranking enviado com sucesso ao veículo")
-			return
-		}
-
-		logger.Erro(fmt.Sprintf("Tentativa %d: Erro ao enviar ranking ao veículo: %v", i+1, erro))
-		time.Sleep(500 * time.Millisecond) // Aguardar antes de tentar novamente
-	}
-
-	logger.Erro("Falha ao enviar ranking após várias tentativas")
-}
-
-func processarReserva(logger *logger.Logger, connectionStore *store.ConnectionStore, conexao net.Conn, mensagem dataJson.Mensagem) {
-	pontoID, _ := strconv.Atoi(mensagem.Conteudo)
-	logger.Info(fmt.Sprintf("Reserva solicitada para ponto ID %d", pontoID))
-
-	// Obter placa do veículo
-	placa := connectionStore.GetVeiculoPlaca(conexao)
-
-	// Encontrar a conexão do ponto pelo ID
-	pontoCon := connectionStore.GetConexaoPorID(pontoID)
-	if pontoCon == nil {
-		logger.Erro(fmt.Sprintf("Ponto ID %d não encontrado", pontoID))
-		// Informar ao veículo que a reserva falhou
-		msg := dataJson.Mensagem{
-			Tipo:     "reserva-falhou",
-			Conteudo: fmt.Sprintf("Ponto ID %d não encontrado", pontoID),
-			Origem:   "servidor",
-		}
-		dataJson.SendMessage(conexao, msg)
-		return
-	}
-
-	filaAtual := verificarFilaPontoEspecifico(logger, pontoCon, pontoID)
-	logger.Info(fmt.Sprintf("Verificação em tempo real: Ponto ID %d tem %d veículos na fila", pontoID, filaAtual))
-
-	// Enviar solicitação para o ponto
-	msgPonto := dataJson.Mensagem{
-		Tipo:     "nova-solicitacao",
-		Conteudo: placa,
-		Origem:   "servidor",
-	}
-
-	erro := dataJson.SendMessage(pontoCon, msgPonto)
-	if erro != nil {
-		logger.Erro(fmt.Sprintf("Erro ao enviar solicitação ao ponto: %v", erro))
-
-		// Notificar o veículo sobre a falha mesmo em caso de erro
-		msgFalha := dataJson.Mensagem{
-			Tipo:     "reserva-falhou",
-			Conteudo: fmt.Sprintf("Falha ao comunicar com o ponto ID %d", pontoID),
-			Origem:   "servidor",
-		}
-		dataJson.SendMessage(conexao, msgFalha)
-		return
-	}
-
-	// Registrar a reserva temporariamente em memória
-	reservasMutex.Lock()
-	reservasAtivas[placa] = pontoID
-	reservasMutex.Unlock()
-
-	// Esperar pela resposta do ponto de forma mais robusta - com timeout de 3 segundos
-	statusResponse := make(chan dataJson.Mensagem)
-	statusError := make(chan error)
-
-	go func() {
-		resp, err := dataJson.ReceiveMessage(pontoCon)
-		if err != nil {
-			statusError <- err
-			return
-		}
-		statusResponse <- resp
-	}()
-
-	// Determinar a posição na fila com valor padrão
-	posicaoFila := filaAtual + 1
-	var mensagemStatus string
-
-	select {
-	case resp := <-statusResponse:
-		if resp.Tipo == "status-fila" {
-			posicaoFila, _ = strconv.Atoi(resp.Conteudo)
-		}
-	case err := <-statusError:
-		logger.Erro(fmt.Sprintf("Erro ao receber status da fila: %v", err))
-	case <-time.After(3 * time.Second):
-		logger.Erro("Timeout ao receber status da fila")
-	}
-
-	// Sempre enviar uma mensagem ao veículo, independente do resultado
-	if posicaoFila <= 1 {
-		mensagemStatus = fmt.Sprintf("Reserva confirmada para ponto ID %d. Você é o próximo a ser atendido!", pontoID)
-	} else {
-		mensagemStatus = fmt.Sprintf("Reserva confirmada para ponto ID %d. Você está na posição %d da fila, aguarde sua vez.", pontoID, posicaoFila)
-	}
-
-	msgConfirmacao := dataJson.Mensagem{
-		Tipo:     "reserva-confirmada",
-		Conteudo: mensagemStatus,
-		Origem:   "servidor",
-	}
-
-	// Tentar enviar várias vezes se necessário
-	maxTentativas := 3
-	for i := 0; i < maxTentativas; i++ {
-		err := dataJson.SendMessage(conexao, msgConfirmacao)
-		if err == nil {
-			break
-		}
-		logger.Erro(fmt.Sprintf("Tentativa %d: Erro ao enviar confirmação ao veículo: %v", i+1, err))
-		time.Sleep(100 * time.Millisecond)
-	}
-
-	go monitorarFilaParaVeiculo(logger, connectionStore, pontoCon, conexao, placa, pontoID)
-}
-
-func verificarFilaPontoEspecifico(logger *logger.Logger, pontoCon net.Conn, pontoID int) int {
-	resp := disponibilidadePonto(logger, pontoCon, pontoID)
-
-	// Extrair o tamanho da fila da resposta
-	var tamanhoFila int = 0
-	if resp.Tipo == "disponibilidade" {
-		if strings.Contains(resp.Conteudo, "sem fila") {
-			tamanhoFila = 0
-		} else {
-			fmt.Sscanf(resp.Conteudo, "Situacao atual: com %d na fila", &tamanhoFila)
-		}
-	}
-
-	return tamanhoFila
-}
-
-func monitorarFilaParaVeiculo(logger *logger.Logger, connectionStore *store.ConnectionStore,
-	pontoCon net.Conn, veiculoCon net.Conn, placa string, pontoID int) {
-	// Monitorar por no máximo 10 minutos
-	timeout := time.After(10 * time.Minute)
-	ticker := time.NewTicker(10 * time.Second)
-	defer ticker.Stop()
-
-	// Verificar se o veículo ainda está na fila e em qual posição
-	for {
-		select {
-		case <-ticker.C:
-			// Verificar se a reserva ainda existe
-			reservasMutex.Lock()
-			pontoReservado, existe := reservasAtivas[placa]
-			reservasMutex.Unlock()
-
-			if !existe || pontoReservado != pontoID {
-				logger.Info(fmt.Sprintf("Monitoramento finalizado para veículo %s - não possui mais reserva ativa", placa))
-				return
-			}
-
-			// Verificar a fila atual
-			tamanhoFila := verificarFilaPontoEspecifico(logger, pontoCon, pontoID)
-
-			// Calcular posição estimada do veículo
-			resp := disponibilidadePonto(logger, pontoCon, pontoID)
-			if resp.Tipo == "disponibilidade" {
-				// Enviar atualização ao veículo
-				msgAtualizar := dataJson.Mensagem{
-					Tipo: "posicao-fila",
-					Conteudo: fmt.Sprintf("Atualização: Você está na fila do ponto ID %d. Existem %d veículos na fila.",
-						pontoID, tamanhoFila),
-					Origem: "servidor",
-				}
-
-				// Não interromper o monitoramento se falhar ao enviar uma atualização
-				err := dataJson.SendMessage(veiculoCon, msgAtualizar)
-				if err != nil {
-					logger.Erro(fmt.Sprintf("Erro ao enviar atualização da fila para veículo %s: %v", placa, err))
-				}
-			}
-
-		case <-timeout:
-			logger.Info(fmt.Sprintf("Monitoramento de fila expirado para veículo %s", placa))
-			return
-		}
-	}
-}
-
-func calcDistanciaParaPontos(logger *logger.Logger, mensagemRecebida dataJson.Mensagem, totalPontosConectados int) map[int]float64 {
-	var latitude, longitude float64
-	_, erro := fmt.Sscanf(mensagemRecebida.Conteudo, "%f,%f", &latitude, &longitude)
-	if erro != nil {
-		logger.Erro(fmt.Sprintf("Erro ao receber localizacao: %v", erro))
-		return map[int]float64{}
-	}
-	logger.Info(fmt.Sprintf("Localizacao recebida: Latitude %f, Longitude %f", latitude, longitude))
-
-	mapDistancias, erro := calcDistancia(latitude, longitude, totalPontosConectados)
-	if erro != nil {
-		logger.Erro(fmt.Sprintf("Erro ao calcular distâncias: %v", erro))
-		return map[int]float64{}
-	}
-
-	return mapDistancias
-}
-
-func calcDistancia(latVeiculo float64, lonVeiculo float64, totalPontos int) (map[int]float64, error) {
-	mapDistancias := make(map[int]float64)
-
-	for id := 1; id <= totalPontos; id++ {
-		ponto, erro := dataJson.GetPontoId(id)
-		if erro == 0 {
-			d := distancia.GetDistancia(latVeiculo, lonVeiculo, ponto.Latitude, ponto.Longitude)
-			km := d / 1000
-			mapDistancias[id] = km
-		} else if erro == 2 {
-			return mapDistancias, fmt.Errorf("ponto id (%d) nao localizado", id)
-		} else {
-			return mapDistancias, fmt.Errorf("Erro ao carregar arquivo json")
-		}
-	}
-	return mapDistancias, nil
-}
-
-func consultarDisponibilidadePontos(logger *logger.Logger, connectionStore *store.ConnectionStore) map[int]int {
-	filas := make(map[int]int)
-	var mutex sync.Mutex // Para proteger o mapa de filas durante acessos concorrentes
-
-	// Criar um WaitGroup para esperar todas as goroutines terminarem
-	var wg sync.WaitGroup
-
-	// Canal para timeout global da operação
-	timeout := time.After(5 * time.Second)
-
-	// Canal para receber os resultados das goroutines
-	resultados := make(chan struct {
-		id          int
-		tamanhoFila int
-	}, connectionStore.GetTotalPontosConectados())
-
-	// Para cada ponto de recarga conectado, consulta sua disponibilidade em uma goroutine separada
-	pontosMap := connectionStore.GetPontosMap()
-	for conexao, id := range pontosMap {
-		wg.Add(1)
-		go func(conexao net.Conn, id int) {
-			defer wg.Done()
-
-			// Criar um canal para timeout individual da consulta
-			consultaTimeout := time.After(2 * time.Second)
-
-			// Canal para receber a resposta da consulta
-			respChan := make(chan dataJson.Mensagem, 1)
-
-			// Fazer a consulta em uma goroutine
-			go func() {
-				resp := disponibilidadePonto(logger, conexao, id)
-				if resp.Tipo == "disponibilidade" {
-					respChan <- resp
-				}
-			}()
-
-			// Esperar pela resposta ou timeout
-			select {
-			case resp := <-respChan:
-				// Extrair o número de veículos na fila da resposta
-				var tamanhoFila int
-				if strings.Contains(resp.Conteudo, "sem fila") {
-					tamanhoFila = 0
-				} else {
-					fmt.Sscanf(resp.Conteudo, "Situacao atual: com %d na fila", &tamanhoFila)
-				}
-
-				// Enviar o resultado para o canal principal
-				resultados <- struct {
-					id          int
-					tamanhoFila int
-				}{id, tamanhoFila}
-
-			case <-consultaTimeout:
-				logger.Erro(fmt.Sprintf("Timeout ao consultar disponibilidade do ponto ID %d", id))
-			}
-		}(conexao, id)
-	}
-
-	// Goroutine para fechar o canal de resultados quando todas as consultas terminarem
-	go func() {
-		wg.Wait()
-		close(resultados)
-	}()
-
-	// Coletar os resultados ou encerrar por timeout
-	done := false
-	for !done {
-		select {
-		case resultado, ok := <-resultados:
-			if !ok {
-				done = true // Canal fechado, todas as consultas terminaram
-				break
-			}
-			mutex.Lock()
-			filas[resultado.id] = resultado.tamanhoFila
-			mutex.Unlock()
-
-		case <-timeout:
-			logger.Erro("Timeout global ao consultar disponibilidade dos pontos")
-			done = true
-		}
-	}
-
-	return filas
-}
-
-func calcularRankingPontos(logger *logger.Logger, latVeiculo, lonVeiculo float64, connectionStore *store.ConnectionStore) []PontoRanking {
-	// Calcular distâncias
-	mapDistancias, _ := calcDistancia(latVeiculo, lonVeiculo, connectionStore.GetTotalPontosConectados())
-
-	// Consultar tamanho das filas em tempo real
-	mapFilas := consultarDisponibilidadePontos(logger, connectionStore)
-
-	// Criar lista de pontos com seus scores
-	var pontos []PontoRanking
-	for id, distancia := range mapDistancias {
-		tamanhoFila, ok := mapFilas[id]
-		if !ok {
-			tamanhoFila = 999 // Valor alto para pontos sem informação de fila
-		}
-
-		// Calcular score (menor é melhor)
-		pesoFila := 0.6
-		pesoDistancia := 0.4
-
-		// Score baseado na distância (valores entre 0-10)
-		scoreDistancia := math.Min(distancia, 10.0) * pesoDistancia
-
-		// Score baseado na fila (com penalidade para filas grandes)
-		var scoreFila float64
-		if tamanhoFila <= 3 {
-			scoreFila = float64(tamanhoFila) * pesoFila
-		} else {
-			// Penalidade para filas maiores que 3
-			scoreFila = (3.0 + math.Pow(float64(tamanhoFila-3), 1.5)) * pesoFila
-		}
-
-		score := scoreDistancia + scoreFila
-
-		pontos = append(pontos, PontoRanking{
-			ID:        id,
-			Distancia: distancia,
-			Fila:      tamanhoFila,
-			Score:     score,
-		})
-	}
-
-	// Ordenar por score (menor é melhor)
-	sort.Slice(pontos, func(i, j int) bool {
-		return pontos[i].Score < pontos[j].Score
-	})
-
-	// Retornar até 3 melhores opções
-	if len(pontos) > 3 {
-		return pontos[:3]
-	}
-	return pontos
-}
-
-// Envia o ranking ao veículo
-func enviarRankingAoVeiculo(logger *logger.Logger, conexao net.Conn, ranking []PontoRanking) error {
-	logger.Info("Preparando para enviar ranking")
-
-	// Formatar o ranking como string
-	var rankingStr string
-	for i, ponto := range ranking {
-		rankingStr += fmt.Sprintf("%d. Ponto ID: %d, Distância: %.2f km, Fila: %d veículos\n",
-			i+1, ponto.ID, ponto.Distancia, ponto.Fila)
-	}
-
-	// Criar a mensagem
-	msg := dataJson.Mensagem{
-		Tipo:     "ranking-pontos",
-		Conteudo: rankingStr,
-		Origem:   "servidor",
-	}
-
-	logger.Info(fmt.Sprintf("Enviando mensagem tipo: %s", msg.Tipo))
-
-	// Enviar a mensagem
-	erro := dataJson.SendMessage(conexao, msg)
-	if erro != nil {
-		logger.Erro(fmt.Sprintf("Erro ao enviar ranking: %v", erro))
-		return erro
-	}
-
-	logger.Info("Ranking enviado com sucesso")
-	return nil
-}
-
-func disponibilidadePonto(logger *logger.Logger, conexao net.Conn, id int) dataJson.Mensagem {
-	solicitacao := dataJson.Mensagem{
-		Tipo:     "get-disponibilidade",
-		Conteudo: fmt.Sprintf("Ola ponto de recarga id (%d)! Informe sua disponibilidade / fila", id),
-		Origem:   "servidor",
-	}
-	erro := dataJson.SendMessage(conexao, solicitacao)
-	if erro != nil {
-		logger.Erro(fmt.Sprintf("Erro ao solicitar disponibilidade ao ponto-de-recarga id (%d): %v", id, erro))
-		return dataJson.Mensagem{}
-	}
-
-	// Adicionar timeout para garantir que não bloqueie
-	respChan := make(chan dataJson.Mensagem, 1)
-	errChan := make(chan error, 1)
-
-	go func() {
-		disponibilidade, erro := dataJson.ReceiveMessage(conexao)
-		if erro != nil {
-			errChan <- erro
-			return
-		}
-		respChan <- disponibilidade
-	}()
-
-	// Aguardar resposta com timeout
-	select {
-	case disponibilidade := <-respChan:
-		return disponibilidade
-	case erro := <-errChan:
-		logger.Erro(fmt.Sprintf("Erro ao receber disponibilidade do ponto id (%d): %v", id, erro))
-		return dataJson.Mensagem{}
-	case <-time.After(4 * time.Second):
-		logger.Erro(fmt.Sprintf("Timeout ao receber disponibilidade do ponto id (%d)", id))
-		return dataJson.Mensagem{}
 	}
 }

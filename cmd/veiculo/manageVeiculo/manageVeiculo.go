@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"path/filepath"
 	"recarga-inteligente/internal/coordenadas"
 	"recarga-inteligente/internal/dataJson"
 	"recarga-inteligente/internal/logger"
@@ -273,35 +272,97 @@ func IdentificacaoInicial(logger *logger.Logger, conexao net.Conn) string {
 	return placa
 }
 
-func placaJaExiste(placa string) bool {
-	path := filepath.Join("app", "internal", "dataJson", "veiculos.json")
+func ConsultarHistorico(leitor *bufio.Reader, logger *logger.Logger, conexao net.Conn, placa string) {
+	msgConsulta := dataJson.Mensagem{
+		Tipo:     "consultar-historico",
+		Conteudo: placa,
+		Origem:   "veiculo",
+	}
 
-	// Tentar abrir o arquivo
-	file, err := os.Open(path)
-	if err != nil {
-		// Se o arquivo não existe, a placa não existe
-		if os.IsNotExist(err) {
-			return false
+	erro := dataJson.SendMessage(conexao, msgConsulta)
+	if erro != nil {
+		logger.Erro(fmt.Sprintf("Erro ao solicitar histórico: %v", erro))
+		fmt.Println("Erro ao consultar pagamentos. Tente novamente mais tarde.")
+	}
+
+	// Aguardar resposta do servidor
+	resposta, erro := dataJson.ReceiveMessage(conexao)
+	if erro != nil {
+		logger.Erro(fmt.Sprintf("Erro ao receber histórico: %v", erro))
+		fmt.Println("Erro ao consultar pagamentos. Tente novamente mais tarde.")
+	}
+
+	if resposta.Tipo == "historico-erro" {
+		fmt.Println("" + resposta.Conteudo)
+	}
+
+	if resposta.Tipo != "historico-recargas" {
+		logger.Erro(fmt.Sprintf("Tipo de resposta inesperado: %s", resposta.Tipo))
+		fmt.Println("Resposta inesperada do servidor. Tente novamente mais tarde.")
+	}
+
+	var recargas []dataJson.Recarga
+	erro = json.Unmarshal([]byte(resposta.Conteudo), &recargas)
+	if erro != nil {
+		logger.Erro(fmt.Sprintf("Erro ao deserializar histórico: %v", erro))
+		fmt.Println("Erro ao processar histórico recebido. Tente novamente mais tarde.")
+	}
+
+	// Exibir o histórico para o usuário
+	if len(recargas) == 0 {
+		fmt.Println("Nenhum histórico de pagamento encontrado para este veículo.")
+	} else {
+		fmt.Println("\n==== Histórico de Recargas ====")
+		fmt.Println("Data                | Ponto ID | Valor (R$)")
+		fmt.Println("------------------------------------------")
+
+		valorTotal := 0.0
+		for _, p := range recargas {
+			fmt.Printf("%s | %d        | R$ %.2f\n", p.Data, p.PontoID, p.Valor)
+			valorTotal += p.Valor
 		}
-		// Em caso de outros erros, assumimos que não conseguimos verificar
-		// então retornamos false para permitir o cadastro
-		return false
-	}
-	defer file.Close()
 
-	var dadosVeiculos dataJson.DadosVeiculos
-	if err := json.NewDecoder(file).Decode(&dadosVeiculos); err != nil {
-		// Se não conseguir decodificar, também assumimos que a placa não existe
-		return false
-	}
+		fmt.Println("------------------------------------------")
+		fmt.Printf("Total: R$ %.2f\n", valorTotal)
 
-	// Verificar se a placa já existe
-	for _, v := range dadosVeiculos.Veiculos {
-		if v.Placa == placa {
-			return true // Placa já existe
+		fmt.Println("\n==== Pagamento  ====")
+		fmt.Println("(1) - Pagar")
+		fmt.Println("(2) - Voltar ao Menu")
+		fmt.Println("Selecione uma opcao: ")
+		opcaoP, _ := leitor.ReadString('\n')
+		opcaoP = strings.TrimSpace(opcaoP)
+
+		switch opcaoP {
+		case "1":
+			msgLimpar := dataJson.Mensagem{
+				Tipo:     "limpar-historico",
+				Conteudo: placa,
+				Origem:   "veiculo",
+			}
+
+			erro := dataJson.SendMessage(conexao, msgLimpar)
+			if erro != nil {
+				logger.Erro(fmt.Sprintf("Erro ao solicitar limpeza do histórico: %v", erro))
+				fmt.Println("Erro ao efetuar pagamento. Tente novamente mais tarde.")
+			}
+
+			// Esperar confirmação do servidor
+			resp, erro := dataJson.ReceiveMessage(conexao)
+			if erro != nil {
+				logger.Erro(fmt.Sprintf("Erro ao receber confirmação de pagamento: %v", erro))
+				fmt.Println("Erro ao confirmar pagamento. Tente novamente.")
+			}
+			if resp.Tipo == "pagamento-confirmado" {
+				fmt.Println("Pagamento efetuado com sucesso!")
+			} else {
+				fmt.Println("Erro ao confirmar pagamento. Tente novamente.")
+			}
+		case "2":
+			return
+		default:
+			fmt.Println("Opcao invalida. Tente novamente.")
 		}
 	}
-	return false // Placa não existe
 }
 
 func MenuVeiculo(logger *logger.Logger, conexao net.Conn) {
@@ -331,64 +392,7 @@ func MenuVeiculo(logger *logger.Logger, conexao net.Conn) {
 			SolicitarRecarga(logger, conexao, placa)
 
 		case "2":
-			msgConsulta := dataJson.Mensagem{
-				Tipo:     "consultar-historico",
-				Conteudo: placa,
-				Origem:   "veiculo",
-			}
-
-			erro := dataJson.SendMessage(conexao, msgConsulta)
-			if erro != nil {
-				logger.Erro(fmt.Sprintf("Erro ao solicitar histórico: %v", erro))
-				fmt.Println("Erro ao consultar pagamentos. Tente novamente mais tarde.")
-				continue
-			}
-
-			// Aguardar resposta do servidor
-			resposta, erro := dataJson.ReceiveMessage(conexao)
-			if erro != nil {
-				logger.Erro(fmt.Sprintf("Erro ao receber histórico: %v", erro))
-				fmt.Println("Erro ao consultar pagamentos. Tente novamente mais tarde.")
-				continue
-			}
-
-			if resposta.Tipo == "historico-erro" {
-				fmt.Println("" + resposta.Conteudo)
-				continue
-			}
-
-			if resposta.Tipo != "historico-recargas" {
-				logger.Erro(fmt.Sprintf("Tipo de resposta inesperado: %s", resposta.Tipo))
-				fmt.Println("Resposta inesperada do servidor. Tente novamente mais tarde.")
-				continue
-			}
-
-			var recargas []dataJson.Recarga
-			erro = json.Unmarshal([]byte(resposta.Conteudo), &recargas)
-			if erro != nil {
-				logger.Erro(fmt.Sprintf("Erro ao deserializar histórico: %v", erro))
-				fmt.Println("Erro ao processar histórico recebido. Tente novamente mais tarde.")
-				continue
-			}
-
-			// Exibir o histórico para o usuário
-			if len(recargas) == 0 {
-				fmt.Println("Nenhum histórico de pagamento encontrado para este veículo.")
-			} else {
-				fmt.Println("\n==== Histórico de Recargas ====")
-				fmt.Println("Data                | Ponto ID | Valor (R$)")
-				fmt.Println("------------------------------------------")
-
-				valorTotal := 0.0
-				for _, p := range recargas {
-					fmt.Printf("%s | %d        | R$ %.2f\n", p.Data, p.PontoID, p.Valor)
-					valorTotal += p.Valor
-				}
-
-				fmt.Println("------------------------------------------")
-				fmt.Printf("Total: R$ %.2f\n", valorTotal)
-			}
-
+			ConsultarHistorico(leitor, logger, conexao, placa)
 		case "3":
 			fmt.Println("Saindo...")
 			conexao.Close()
@@ -429,34 +433,4 @@ func SolicitarRecarga(logger *logger.Logger, conexao net.Conn, placa string) {
 	} else {
 		logger.Erro(fmt.Sprintf("Resposta inesperada do servidor: %s", resposta.Tipo))
 	}
-}
-
-func consultarPagamentosVeiculo(placa string) ([]dataJson.Recarga, error) {
-	path := filepath.Join("app", "internal", "dataJson", "veiculos.json")
-
-	// Tentar abrir o arquivo
-	file, err := os.Open(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			// Se o arquivo não existe, não há histórico
-			return []dataJson.Recarga{}, nil
-		}
-		return nil, err
-	}
-	defer file.Close()
-
-	// Decodificar dados existentes
-	var dadosVeiculos dataJson.DadosVeiculos
-	if err := json.NewDecoder(file).Decode(&dadosVeiculos); err != nil {
-		return nil, err
-	}
-
-	// Procurar o veículo pela placa
-	for _, v := range dadosVeiculos.Veiculos {
-		if v.Placa == placa {
-			// Retornar o histórico de recargas desse veículo
-			return v.Recargas, nil
-		}
-	}
-	return []dataJson.Recarga{}, nil
 }

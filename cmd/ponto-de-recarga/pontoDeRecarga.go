@@ -13,82 +13,47 @@ import (
 	"recarga-inteligente/internal/tcpIP"
 )
 
-var fila []string
 var mutex sync.Mutex
 var veiculosEmEspera map[string]chan bool
-
-// Adicionar um canal para sinalizar processamento de próximo veículo
-var (
-	proximoVeiculoSignal = make(chan struct{}, 1)
-)
-
-func enviarDisponibilidade(logger *logger.Logger, conexao net.Conn) {
-	mutex.Lock()
-	defer mutex.Unlock()
-
-	status := "Situacao atual: "
-	if len(fila) == 0 {
-		status += "sem fila"
-	} else {
-		status += fmt.Sprintf("com %d na fila", len(fila))
-	}
-
-	msg := dataJson.Mensagem{
-		Tipo:     "disponibilidade",
-		Conteudo: status,
-		Origem:   "ponto-de-recarga",
-	}
-	erro := dataJson.SendMessage(conexao, msg)
-	if erro != nil {
-		logger.Erro(fmt.Sprintf("Erro ao enviar disponibilidade - %v", erro))
-	}
-}
+var filaAtual []string
+var proximoVeiculoSignal = make(chan struct{}, 1)
 
 func processarFila(logger *logger.Logger, conexao net.Conn) {
 	for {
-		// Verificar se há veículos na fila
 		mutex.Lock()
-		if len(fila) == 0 {
+		if len(filaAtual) == 0 {
 			mutex.Unlock()
-			// Esperar por um sinal ou timeout antes de verificar novamente
 			select {
 			case <-proximoVeiculoSignal:
-				// Recebeu sinal para processar próximo veículo
-				logger.Info("Recebido sinal para processar próximo veículo")
+				logger.Info("Sinal recebido para processar próximo veículo")
 				continue
 			case <-time.After(1 * time.Second):
-				// Timeout normal, verificar novamente
 				continue
 			}
 		}
 
-		// Há pelo menos um veículo na fila - pegar o primeiro
-		veiculoAtual := fila[0]
-		logger.Info(fmt.Sprintf("Processando próximo veículo na fila: %s", veiculoAtual))
+		veiculoAtual := filaAtual[0]
+		logger.Info(fmt.Sprintf("Processando veículo na fila: %s", veiculoAtual))
 		mutex.Unlock()
 
-		// Notificar o servidor que estamos chamando este veículo
 		msg := dataJson.Mensagem{
 			Tipo:     "chamando-veiculo",
-			Conteudo: veiculoAtual, // Usar a placa do veículo consistentemente
+			Conteudo: veiculoAtual,
 			Origem:   "ponto-de-recarga",
 		}
 
-		erro := dataJson.SendMessage(conexao, msg)
-		if erro != nil {
-			logger.Erro(fmt.Sprintf("Erro ao notificar servidor sobre veículo em atendimento: %v", erro))
-			time.Sleep(2 * time.Second) // Esperar um pouco antes de tentar novamente
+		if err := dataJson.SendMessage(conexao, msg); err != nil {
+			logger.Erro(fmt.Sprintf("Erro ao enviar chamada de veículo: %v", err))
+			time.Sleep(2 * time.Second)
 			continue
 		}
 
-		// Criar canal para aguardar chegada do veículo
 		chegou := make(chan bool, 1)
-
 		mutex.Lock()
 		veiculosEmEspera[veiculoAtual] = chegou
 		mutex.Unlock()
 
-		logger.Info(fmt.Sprintf("Aguardando chegada do veículo: %s", veiculoAtual))
+		logger.Info(fmt.Sprintf("Aguardando chegada de %s", veiculoAtual))
 
 		// Aguardar com timeout a chegada do veículo
 		timeout := 60 * time.Second // Um minuto para o veículo chegar
@@ -101,8 +66,8 @@ func processarFila(logger *logger.Logger, conexao net.Conn) {
 
 			// Remover da fila e do mapa de espera
 			mutex.Lock()
-			if len(fila) > 0 && fila[0] == veiculoAtual {
-				fila = fila[1:] // Remover da fila
+			if len(filaAtual) > 0 && filaAtual[0] == veiculoAtual {
+				filaAtual = filaAtual[1:] // Remover da fila
 			}
 			delete(veiculosEmEspera, veiculoAtual) // Remover do mapa
 			mutex.Unlock()
@@ -124,8 +89,8 @@ func processarFila(logger *logger.Logger, conexao net.Conn) {
 
 		// Remover o veículo da fila e do mapa de espera
 		mutex.Lock()
-		if len(fila) > 0 && fila[0] == veiculoAtual {
-			fila = fila[1:] // Remover o primeiro elemento
+		if len(filaAtual) > 0 && filaAtual[0] == veiculoAtual {
+			filaAtual = filaAtual[1:] // Remover o primeiro elemento
 		}
 		delete(veiculosEmEspera, veiculoAtual)
 		mutex.Unlock()
@@ -139,65 +104,54 @@ func processarFila(logger *logger.Logger, conexao net.Conn) {
 		}
 
 		dataJson.SendMessage(conexao, msgFinalizada)
-
 		// Pequena pausa antes de processar o próximo veículo
 		time.Sleep(1 * time.Second)
 	}
 }
 
-func chamarProximoVeiculo(conexao net.Conn, logger *logger.Logger) {
+func enviarDisponibilidade(logger *logger.Logger, conexao net.Conn) {
 	mutex.Lock()
-	if len(fila) == 0 {
-		mutex.Unlock()
-		return
+	defer mutex.Unlock()
+
+	status := "Situacao atual: "
+	if len(filaAtual) == 0 {
+		status += "sem fila"
+	} else {
+		status += fmt.Sprintf("com %d na fila", len(filaAtual))
 	}
 
-	veiculoID := fila[0]
-	mutex.Unlock()
-
-	// Notificar o servidor que está chamando este veículo
-	msgChamando := dataJson.Mensagem{
-		Tipo:     "chamando-veiculo",
-		Conteudo: veiculoID,
+	msg := dataJson.Mensagem{
+		Tipo:     "disponibilidade",
+		Conteudo: status,
 		Origem:   "ponto-de-recarga",
 	}
-
-	// Enviar em uma goroutine para não bloquear
-	go func() {
-		erro := dataJson.SendMessage(conexao, msgChamando)
-		if erro != nil {
-			logger.Erro(fmt.Sprintf("Erro ao notificar servidor sobre chamada do veículo %s: %v",
-				veiculoID, erro))
-		}
-	}()
-
+	erro := dataJson.SendMessage(conexao, msg)
+	if erro != nil {
+		logger.Erro(fmt.Sprintf("Erro ao enviar disponibilidade - %v", erro))
+	}
 }
 
 func IdentificacaoInicial(logger *logger.Logger, conexao net.Conn) {
-	erro := tcpIP.SendIdentification(conexao, "ponto-de-recarga")
-	if erro != nil {
-		logger.Erro(fmt.Sprintf("Erro ao obter resposta do servidor - %v", erro))
-		return
+	if err := tcpIP.SendIdentification(conexao, "ponto-de-recarga"); err != nil {
+		logger.Erro(fmt.Sprintf("Erro ao enviar identificação: %v", err))
 	}
 }
 
-func main() {
-	// Inicializar o mapa de veículos em espera
-	veiculosEmEspera = make(map[string]chan bool)
 
-	//inicializa o ponto de recarga e conecta ao servidor
+func main() {
+	veiculosEmEspera = make(map[string]chan bool)
 	logger := logger.NewLogger(os.Stdout)
-	conexao, erro := tcpIP.ConnectToServerTCP("servidor:5000")
-	if erro != nil {
-		logger.Erro("Erro em ConnectToServerTCP - ponto de recarga")
+
+	conexao, err := tcpIP.ConnectToServerTCP("servidor:5000")
+	if err != nil {
+		logger.Erro("Erro ao conectar com o servidor")
 		return
 	}
 	defer conexao.Close()
-	//envia identificacao inicial
+
 	logger.Info("Ponto de Recarga conectado")
 	IdentificacaoInicial(logger, conexao)
 
-	//recebe solicitacoes do servidor
 	go processarFila(logger, conexao)
 
 	for {
@@ -206,32 +160,19 @@ func main() {
 			logger.Erro(fmt.Sprintf("Erro ao ler mensagem do servidor - %v", erro))
 			return
 		}
-
 		// Processar cada tipo de mensagem em uma goroutine separada para não bloquear o loop principal
 		go func(mensagem dataJson.Mensagem) {
 			switch mensagem.Tipo {
-			case "get-disponibilidade":
+			case "fila-atualizada":
 				mutex.Lock()
-				status := "Situacao atual: "
-				if len(fila) == 0 {
-					status += "sem fila"
-				} else {
-					status += fmt.Sprintf("com %d na fila", len(fila))
-				}
+				filaAtual = dataJson.ParseFila(mensagem.Conteudo)
+				logger.Info(fmt.Sprintf("Fila atualizada com %d veículos", len(filaAtual)))
 				mutex.Unlock()
-
-				respMsg := dataJson.Mensagem{
-					Tipo:     "disponibilidade",
-					Conteudo: status,
-					Origem:   "ponto-de-recarga",
-				}
-				dataJson.SendMessage(conexao, respMsg)
-
 			case "nova-solicitacao":
 				mutex.Lock()
 				veiculoID := mensagem.Conteudo
-				posicaoFila := len(fila) + 1
-				fila = append(fila, veiculoID)
+				posicaoFila := len(filaAtual) + 1
+				filaAtual = append(filaAtual, veiculoID)
 				logger.Info(fmt.Sprintf("Veículo %s adicionado à fila. Posição: %d", veiculoID, posicaoFila))
 
 				statusMsg := dataJson.Mensagem{
@@ -249,7 +190,7 @@ func main() {
 				mutex.Lock()
 				// Verificar se este veículo está em nossa fila
 				encontrado := false
-				for i, id := range fila {
+				for i, id := range filaAtual {
 					if id == placaVeiculo {
 						encontrado = true
 						// Processar apenas se for o primeiro da fila
@@ -270,7 +211,6 @@ func main() {
 						break
 					}
 				}
-
 				if !encontrado {
 					mutex.Unlock()
 					logger.Erro(fmt.Sprintf("Veículo %s informou chegada, mas não está na fila", placaVeiculo))
@@ -283,8 +223,10 @@ func main() {
 				default:
 					// Canal já tem um sinal, então não precisa enviar outro
 				}
+			case "get-disponibilidade":
+				enviarDisponibilidade(logger, conexao)
+				logger.Info("Disponibilidade atual enviada ao servidor")
 			default:
-				logger.Info(fmt.Sprintf("Mensagem recebida do servidor: %s", mensagem.Conteudo))
 			}
 		}(msg)
 	}

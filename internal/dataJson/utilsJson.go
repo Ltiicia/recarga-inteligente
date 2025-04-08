@@ -434,3 +434,70 @@ func ObterHistoricoRecargas(placa string) ([]Recarga, error) {
 	// Veículo não encontrado
 	return []Recarga{}, nil
 }
+
+func ParseFila(conteudo string) []string {
+	var fila []string
+	err := json.Unmarshal([]byte(conteudo), &fila)
+	if err != nil {
+		fmt.Println("Erro ao decodificar fila:", err)
+		return nil
+	}
+	return fila
+}
+
+func LimparHistoricoRecargas(placa string) error {
+	path := filepath.Join("app", "internal", "dataJson", "veiculos.json")
+	alternatives := []string{
+		"internal/dataJson/veiculos.json",
+		"veiculos.json",
+		"./veiculos.json",
+		"/app/internal/dataJson/veiculos.json",
+	}
+
+	// Abrir o arquivo original
+	file, err := os.Open(path)
+	if err != nil {
+		for _, altPath := range alternatives {
+			file, err = os.Open(altPath)
+			if err == nil {
+				path = altPath
+				break
+			}
+		}
+		if err != nil {
+			return fmt.Errorf("não foi possível abrir o arquivo de veículos: %v", err)
+		}
+	}
+	defer file.Close()
+
+	var dados DadosVeiculos
+	if err := json.NewDecoder(file).Decode(&dados); err != nil {
+		return fmt.Errorf("erro ao decodificar JSON: %v", err)
+	}
+
+	// Limpar recargas do veículo
+	encontrado := false
+	for i, v := range dados.Veiculos {
+		if v.Placa == placa {
+			dados.Veiculos[i].Recargas = []Recarga{}
+			encontrado = true
+			break
+		}
+	}
+	if !encontrado {
+		return fmt.Errorf("veículo com placa %s não encontrado", placa)
+	}
+
+	// Reescrever o arquivo com os dados atualizados
+	novoJSON, err := json.MarshalIndent(dados, "", "  ")
+	if err != nil {
+		return fmt.Errorf("erro ao serializar JSON atualizado: %v", err)
+	}
+
+	err = os.WriteFile(path, novoJSON, 0644)
+	if err != nil {
+		return fmt.Errorf("erro ao sobrescrever o arquivo de veículos: %v", err)
+	}
+
+	return nil
+}

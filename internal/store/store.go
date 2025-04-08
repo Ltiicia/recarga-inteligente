@@ -1,6 +1,7 @@
 package store
 
 import (
+	"fmt"
 	"net"
 	"recarga-inteligente/internal/dataJson"
 	"sort"
@@ -8,10 +9,12 @@ import (
 )
 
 type ConnectionStore struct {
-	mutex           sync.Mutex
-	veiculos        map[net.Conn]string
-	pontosDeRecarga map[net.Conn]int
-	idsCadastrados  []int
+	mutex                 sync.Mutex
+	veiculos              map[net.Conn]string
+	pontosDeRecarga       map[net.Conn]int
+	idsCadastrados        []int
+	filasDosPontos        map[int][]dataJson.Veiculo
+	disponibilidadePontos map[int]bool
 }
 
 func NewConnectionStore() *ConnectionStore {
@@ -24,7 +27,11 @@ func NewConnectionStore() *ConnectionStore {
 	return &ConnectionStore{
 		veiculos:        make(map[net.Conn]string),
 		pontosDeRecarga: make(map[net.Conn]int),
-		idsCadastrados:  idsJson,
+
+		idsCadastrados: idsJson,
+
+		filasDosPontos:        make(map[int][]dataJson.Veiculo),
+		disponibilidadePontos: make(map[int]bool),
 	}
 }
 
@@ -76,9 +83,10 @@ func (connection *ConnectionStore) RemoveConnection(conexao net.Conn) {
 		connection.idsCadastrados = append(connection.idsCadastrados, id) //retorna o id para a lista
 		sort.Ints(connection.idsCadastrados)                              //ordena
 		delete(connection.pontosDeRecarga, conexao)
-	} else {
-		delete(connection.veiculos, conexao)
 	}
+	fmt.Printf("Placa removida da conexão: %s\n", connection.veiculos[conexao])
+	delete(connection.veiculos, conexao)
+
 	conexao.Close()
 }
 
@@ -138,4 +146,77 @@ func (connection *ConnectionStore) GetTodasPlacasAtivas() []string {
 	}
 
 	return placas
+}
+
+func (connection *ConnectionStore) GetFilaPorPonto(pontoID int) []dataJson.Veiculo {
+	return connection.filasDosPontos[pontoID]
+}
+
+func (connection *ConnectionStore) AtualizarFilaDoPonto(pontoID int, fila []dataJson.Veiculo) {
+	connection.mutex.Lock()
+	defer connection.mutex.Unlock()
+	connection.filasDosPontos[pontoID] = fila
+}
+
+func (connection *ConnectionStore) AdicionarVeiculoNaFila(pontoID int, veiculo dataJson.Veiculo) {
+	connection.mutex.Lock()
+	defer connection.mutex.Unlock()
+	fila := connection.filasDosPontos[pontoID]
+	connection.filasDosPontos[pontoID] = append(fila, veiculo)
+}
+
+func (connection *ConnectionStore) RemoverVeiculoDaFila(pontoID int, placa string) {
+	connection.mutex.Lock()
+	defer connection.mutex.Unlock()
+	fila := connection.filasDosPontos[pontoID]
+	novaFila := []dataJson.Veiculo{}
+	for _, veiculo := range fila {
+		if veiculo.Placa != placa {
+			novaFila = append(novaFila, veiculo)
+		}
+	}
+	connection.filasDosPontos[pontoID] = novaFila
+}
+
+func (c *ConnectionStore) VeiculoEstaEmFila(placa string) bool {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+
+	for _, fila := range c.filasDosPontos {
+		for _, veiculo := range fila {
+			if veiculo.Placa == placa {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func (connection *ConnectionStore) PlacaJaEmUso(placa string, conexaoAtual net.Conn) bool {
+	connection.mutex.Lock()
+	defer connection.mutex.Unlock()
+
+	for conn, p := range connection.veiculos {
+		if p == placa && conn != conexaoAtual {
+			return true
+		}
+	}
+	return false
+}
+
+func (connection *ConnectionStore) RemoverPlacaAtiva(conexao net.Conn) {
+	connection.mutex.Lock()
+	defer connection.mutex.Unlock()
+
+	for c, _ := range connection.veiculos {
+		if c == conexao {
+			connection.veiculos[c] = ""
+			delete(connection.veiculos, c)
+			connection.RemoveConnection(c)
+		}
+	}
+	if _, existe := connection.veiculos[conexao]; existe {
+		delete(connection.veiculos, conexao)
+	}
+	connection.veiculos[conexao] = ""
 }
