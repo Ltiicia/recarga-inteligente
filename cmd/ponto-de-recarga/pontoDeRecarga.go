@@ -166,14 +166,14 @@ func main() {
 			case "fila-atualizada":
 				mutex.Lock()
 				filaAtual = dataJson.ParseFila(mensagem.Conteudo)
-				logger.Info(fmt.Sprintf("Fila atualizada com %d veículos", len(filaAtual)))
+				logger.Info("Fila atualizada")
 				mutex.Unlock()
 			case "nova-solicitacao":
 				mutex.Lock()
 				veiculoID := mensagem.Conteudo
 				posicaoFila := len(filaAtual) + 1
 				filaAtual = append(filaAtual, veiculoID)
-				logger.Info(fmt.Sprintf("Veículo %s adicionado à fila. Posição: %d", veiculoID, posicaoFila))
+				logger.Info(fmt.Sprintf("Veículo %s adicionado à fila.", veiculoID))
 
 				statusMsg := dataJson.Mensagem{
 					Tipo:     "status-fila",

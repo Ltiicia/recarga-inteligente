@@ -324,8 +324,8 @@ func processarReserva(logger *logger.Logger, connectionStore *store.ConnectionSt
 		return
 	}
 
-	filaAtual := connectionStore.GetFilaPorPonto(pontoID)
-	logger.Info(fmt.Sprintf("Verificação em tempo real: Ponto ID %d tem %d veículos na fila", pontoID, len(filaAtual)+1))
+	//filaAtual := connectionStore.GetFilaPorPonto(pontoID)
+	//logger.Info(fmt.Sprintf("Verificação em tempo real: Ponto ID %d tem %d veículos na fila", pontoID, len(filaAtual)+1))
 
 	// Enviar solicitação para o ponto
 	msgPonto := dataJson.Mensagem{
@@ -395,7 +395,7 @@ func processarReserva(logger *logger.Logger, connectionStore *store.ConnectionSt
 
 func verificarFilaPontoEspecifico(logger *logger.Logger, connectionStore *store.ConnectionStore, pontoID int) int {
 	resp := disponibilidadePonto(logger, connectionStore, pontoID)
-	logger.Info(fmt.Sprintf("disponibilidade recebida em verificarFilaPontoEspecifico: %s", resp.Conteudo))
+	//logger.Info(fmt.Sprintf("disponibilidade recebida em verificarFilaPontoEspecifico: %s", resp.Conteudo))
 
 	// Extrair o tamanho da fila da resposta
 	var tamanhoFila int = 0
@@ -403,7 +403,7 @@ func verificarFilaPontoEspecifico(logger *logger.Logger, connectionStore *store.
 		if strings.Contains(resp.Conteudo, "sem fila") {
 			tamanhoFila = 0
 		} else {
-			fmt.Sscanf(resp.Conteudo, "Situacao atual: com %d na fila", &tamanhoFila)
+			//fmt.Sscanf(resp.Conteudo, "Situacao atual: com %d na fila", &tamanhoFila)
 		}
 	}
 
@@ -435,7 +435,7 @@ func monitorarFilaParaVeiculo(logger *logger.Logger, connectionStore *store.Conn
 
 			// Calcular posição estimada do veículo
 			resp := disponibilidadePonto(logger, connectionStore, pontoID)
-			logger.Info(fmt.Sprintf("disponibilidade recebida em monitorarFilaParaVeiculo: %s", resp.Conteudo))
+			//logger.Info(fmt.Sprintf("disponibilidade recebida em monitorarFilaParaVeiculo: %s", resp.Conteudo))
 
 			if resp.Tipo == "disponibilidade" {
 				// Enviar atualização ao veículo
@@ -493,7 +493,7 @@ func consultarDisponibilidadePontos(logger *logger.Logger, connectionStore *stor
 			// Fazer a consulta em uma goroutine
 			go func() {
 				resp := disponibilidadePonto(logger, connectionStore, id)
-				logger.Info(fmt.Sprintf("disponibilidade recebida em consultarDisponibilidadePontos: %s", resp.Conteudo))
+				//logger.Info(fmt.Sprintf("disponibilidade recebida em consultarDisponibilidadePontos: %s", resp.Conteudo))
 
 				if resp.Tipo == "disponibilidade" {
 					respChan <- resp
