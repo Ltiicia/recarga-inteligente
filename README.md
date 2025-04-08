@@ -11,8 +11,9 @@
 - [Protocolo de Comunicação](#protocolo-de-comunicação)
 - [Conexões Simultâneas](#conexões-simultâneas)
 - [Gerenciamento de Concorrência](#gerenciamento-de-concorrência)
+- [Execução com Docker](#execução-com-docker)
 - [Como Executar](#como-executar)
-- ...
+- [Tecnologias Utilizadas](#tecnologias-utilizadas)
 - [Referências](#referências)
 
 ## Introdução
@@ -124,14 +125,51 @@ A simulação do sistema é feita utilizando Docker-Compose, com containers para
 
 A imagem Docker do sistema é construída com base nos Dockerfiles que inclui as dependências necessárias, mantendo o ambiente leve e eficiente.
 
+## Como Executar
+### Pré-requisitos
+Certifique-se de ter os seguintes softwares instalados na máquina:
+- [Docker](https://www.docker.com/)
+- [Docker Compose](https://docs.docker.com/compose/)
+- [Go](https://go.dev/) *Opcional – Para testes locais fora dos contêineres
+
+### Passo a passo
+1. Clone o repositório:
+   ```bash
+   git clone https://github.com/usuario/nome-do-repositorio.git
+   cd nome-do-repositorio
+   ```
+2. Compile as imagens Docker e inicie o sistema:
+   ```bash
+   docker-compose up build -d
+   ```
+Isso iniciará os contêineres do servidor, pontos de recarga e veículos, todos conectados em uma rede Docker interna.
+
+3. Em seguida execute para ter acesso a interface dos clientes.
+    ```bash
+    docker-compose exec veiculo sh
+    ```
+    ou
+    ```bash
+    docker-compose exec ponto-de-recarga sh
+    ```
+4. Por fim ao entrar no terminal do cotainer, executa o último comando, para executar a aplicação do cliente.
+    ```bash
+    ./veiculo
+    ```
+    ou 
+    ```bash
+    ./ponto-de-recarga
+    ```
+5. Para encerrar:
+   ```bash
+   docker-compose down
+   ```
+
 ## Tecnologias Utilizadas
 - Linguagem: Go (Golang)
 - Comunicação: sockets TCP/IP
 - Execução: Docker, Docker Compose
 - Mock de dados: JSON
-
-## Como Executar
-...
 
 ## Desenvolvedoras
 <table>
