@@ -165,6 +165,11 @@ Isso iniciará os contêineres do servidor, pontos de recarga e veículos, todos
    docker-compose down
    ```
 
+Caso deseje ver os logs do servidor, execute em outro terminal:  
+    ```bash
+    docker compose logs -f servidor
+    ```  
+    (servidor, veiculo-ct ou ponto-de-recarga-ct)
 ## Tecnologias Utilizadas
 - Linguagem: Go (Golang)
 - Comunicação: sockets TCP/IP
