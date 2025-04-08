@@ -113,7 +113,7 @@ func handlePontoDeRecarga(logger *logger.Logger, connectionStore *store.Connecti
 			&placaVeiculo, &consumoTotal, &valor)
 
 		if err != nil || n != 3 {
-			logger.Erro(fmt.Sprintf("Erro ao extrair informacoes da recarga: %v (itens extraídos: %d)", err, n))
+			//logger.Erro(fmt.Sprintf("Erro ao extrair informacoes da recarga: %v (itens extraídos: %d)", err, n))
 
 			// Método alternativo de extração como fallback
 			if strings.Contains(mensagem.Conteudo, "Veículo") {
@@ -211,7 +211,7 @@ func disponibilidadePonto(logger *logger.Logger, connectionStore *store.Connecti
 		if err != nil {
 			logger.Erro(fmt.Sprintf("Erro ao enviar fila para ponto %d: %v", pontoId, err))
 		} else {
-			logger.Info(fmt.Sprintf("Fila Recebida do ponto %d com sucesso", pontoId))
+			//logger.Info(fmt.Sprintf("Fila Recebida do ponto %d com sucesso", pontoId))
 		}
 	}
 
@@ -431,7 +431,7 @@ func monitorarFilaParaVeiculo(logger *logger.Logger, connectionStore *store.Conn
 			}
 
 			// Verificar a fila atual
-			tamanhoFila := verificarFilaPontoEspecifico(logger, connectionStore, pontoID)
+			//tamanhoFila := verificarFilaPontoEspecifico(logger, connectionStore, pontoID)
 
 			// Calcular posição estimada do veículo
 			resp := disponibilidadePonto(logger, connectionStore, pontoID)
@@ -441,8 +441,8 @@ func monitorarFilaParaVeiculo(logger *logger.Logger, connectionStore *store.Conn
 				// Enviar atualização ao veículo
 				msgAtualizar := dataJson.Mensagem{
 					Tipo: "posicao-fila",
-					Conteudo: fmt.Sprintf("Atualização: Você está na fila do ponto ID %d. Existem %d veículos na fila.",
-						pontoID, tamanhoFila),
+					Conteudo: fmt.Sprintf("Atualização: Você está na fila do ponto ID %d.",
+						pontoID),
 					Origem: "servidor",
 				}
 
