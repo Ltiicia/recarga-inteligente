@@ -90,38 +90,39 @@ A comunicação entre as partes ocorre via **sockets TCP/IP** conforme ilustraç
 - **Finalização e Liberação**: O veículo é removido da fila ao final da recarga e recebe o valor para pagamento.
 
 ## Protocolo de Comunicação
-A comunicação entre os clientes e o servidor é baseada em mensagens JSON transmitidas via sockets TCP. O formato JSON foi escolhido por ser leve, legível e amplamente adotado em sistemas distribuídos. Cada mensagem permite a troca de informações, dados, além de encapsular ações como identificação, requisição de recarga, resposta de disponibilidade, reservas, entre outros.
+A comunicação entre os clientes e o servidor é realizada por meio de sockets TCP utilizando mensagens estruturadas em JSON. A escolha do formato JSON foi decorrente da necessidade de garantia de entrega confiável e legível, além do formato ser leve, compatível com diversos ambientes e amplamente adotado em sistemas distribuídos. Cada mensagem permite a troca de dados e encapsulam ações como identificação dos clientes, solicitação de recarga, envio de disponibilidade, confirmação de reservas, entre outros.
 
 ### Dados e Estado
-Os dados do sistema como área de cobertura e localização dos pontos de recarga cadastrados, são carregados a partir de arquivos JSON ao iniciar o servidor e permanecem em memória, funcionando como um cache de alta performance. Isso reduz a latência e permite respostas rápidas às requisições dos veículos.  
-
-### Paradigma de Comunicação
-O sistema segue o paradigma stateless para comunicação com os veículos. Cada requisição é independente, e os veículos devem se identificar a cada nova interação. Isso facilita a escalabilidade e permite a execução de múltiplas instâncias do servidor, se necessário. Apesar de ser stateless para veículos, o sistema possui uma gestão de estado parcial para os pontos de recarga, que mantêm sessões ativas enquanto conectados ao servidor, permitindo a troca contínua de mensagens e atualização de suas filas de recarga.
+Os dados do sistema como área de cobertura e localização dos pontos de recarga cadastrados, são carregados a partir de arquivos JSON ao iniciar o servidor e permanecem em memória, funcionando como um cache de alta performance para as operações. Isso reduz a latência e permite respostas rápidas às requisições.  
 
 ## Conexões Simultâneas
-O servidor foi projetado para suportar múltiplas conexões simultâneas utilizando goroutines, nativas da linguagem Go. A cada nova conexão, uma nova goroutine é iniciada, permitindo que o servidor processe requisições de forma paralela e responsiva, sem bloquear outras conexões, maximizando a escalabilidade do sistema e garantindo que a resposta a uma solicitação de recarga, por exemplo, não afete outras conexões ativas.
+O servidor foi projetado para suportar múltiplas conexões simultâneas utilizando goroutines, nativas da linguagem Go. A cada nova conexão com um cliente, uma nova goroutine é iniciada, permitindo que o servidor processe requisições de forma paralela e responsiva, sem bloquear outras conexões, maximizando a escalabilidade do sistema e garantindo que a resposta a uma solicitação de recarga, por exemplo, não afete outras conexões ativas.
 
 ## Gerenciamento de Concorrência
-Para garantir a integridade dos dados durante operações concorrentes como por exemplo a inserção em filas de espera para reserva de recargas, foi implementado o uso de mutexes. O controle de exclusão mútua assegura que múltiplas goroutines não modifiquem simultaneamente estruturas de dados compartilhadas, como a fila de espera de um ponto de recarga.  
+Para garantir a integridade dos dados durante operações concorrentes como por exemplo a atualizações das filas de espera dos pontos de recarga, registro de reservas, modificação em estruturas de dados, entre outras. Foi implementado o uso de mutexes - locks de exclusão mútua.   
+
+O controle de exclusão mútua assegura que múltiplas goroutines não modifiquem simultaneamente estruturas de dados compartilhadas, como a fila de espera de um ponto de recarga.  
 
 Funcionamento:  
 - Lock: Antes da operação crítica, a goroutine realiza um mutex.Lock().  
-- Seção Crítica: Os dados são validados e atualizados de forma segura.
-- Unlock: Após a operação, o mutex é liberado com mutex.Unlock(), permitindo que outras goroutines prossigam.  
+- Seção Crítica: A operação crítica é executada de forma exclusica onde os dados são validados e atualizados de forma segura.
+- Unlock: Após a operação, o mutex é liberado com mutex.Unlock(), permitindo que outras goroutines acessem os dados.  
 
-Essa abordagem evita problemas como múltiplos veículos tentando ocupar a mesma posição na fila de reservas de um determinado ponto de recarga.
+Essa abordagem impede condições de corrida, evitando problemas como múltiplos veículos tentando ocupar a mesma posição na fila de reservas de um determinado ponto de recarga simultaneamente.
 
 ### Garantia de Reserva e Integridade
 Ao solicitar uma recarga, o veículo envia sua localização atual ao servidor. O servidor, então:
 
-- Solicita a disponibilidade / fila dos pontos de recarga conectados.
-- Calcula as distâncias e os scores estimados com base nas filas.
+- Solicita a disponibilidade / fila atual dos pontos de recarga conectados.
+- Calcula as distâncias e os scores com base nas filas rankeando os pontos.
 - Retorna ao veículo as três melhores opções de pontos.
 
-Após a escolha, o veículo é adicionado à fila do ponto selecionado. Para garantir a integridade da operação, cada etapa é realizada com controle de concorrência utilizando mutexes e channels, impedindo que dois veículos reservem a mesma posição simultaneamente.
+Após a escolha da opção desejada, o veículo é adicionado à fila do ponto selecionado. Para garantir a integridade da operação, cada etapa é realizada com controle de concorrência utilizando mutexes e channels, impedindo que dois veículos reservem a mesma posição simultaneamente.
 
 ### Execução com Docker
-A simulação do sistema é feita utilizando docker-compose, com containers para o Servidor, os Pontos de recarga e os Veículos. O Docker Compose permite aos módulos compartilhar uma rede interna privada, proporcionando a troca de mensagens TCP entre os containers.
+A simulação do sistema é feita utilizando Docker-Compose, com containers para o Servidor, os Pontos de recarga e os Veículos. O Docker Compose permite as partes do sistema compartilhar uma rede interna privada, proporcionando a troca de mensagens TCP entre os containers.  
+
+A imagem Docker do sistema é construída com base nos Dockerfiles que inclui as dependências necessárias, mantendo o ambiente leve e eficiente.
 
 ## Tecnologias Utilizadas
 - Linguagem: Go (Golang)
