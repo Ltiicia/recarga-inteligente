@@ -197,3 +197,8 @@ Como resultado, o sistema atendeu aos requisitos propostos, oferecendo uma soluÃ
 </table>
 
 ## ReferÃªncias
+Donovan, A. A. and Kernighan, B. W. (2016). The Go Programming Language. Addison-Wesley.
+Merkel, D. (2014). Docker: lightweight Linux containers for consistent development and deployment. Linux Journal, 2014(239), 2.
+Silberschatz, A., Galvin, P. B., and Gagne, G. (2018). Operating System Concepts (10th ed.). Wiley.
+Stevens, W. R. (1998). UNIX Network Programming, Volume 1: The Sockets Networking API (2nd ed.). Prentice Hall.
+Tanenbaum, A. S. and Van Steen, M. (2007). Distributed Systems: Principles and Paradigms (2nd ed.). Pearson Prentice Hall.
