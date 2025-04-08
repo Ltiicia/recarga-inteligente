@@ -14,6 +14,7 @@
 - [Execução com Docker](#execução-com-docker)
 - [Como Executar](#como-executar)
 - [Tecnologias Utilizadas](#tecnologias-utilizadas)
+- [Conclusão](#conclusão)
 - [Referências](#referências)
 
 ## Introdução
@@ -175,6 +176,15 @@ Caso deseje ver os logs do servidor, execute em outro terminal:
 - Comunicação: sockets TCP/IP
 - Execução: Docker, Docker Compose
 - Mock de dados: JSON
+
+## Conclusão
+O desenvolvimento deste sistema permitiu aplicar na prática conceitos fundamentais de redes de computadores, comunicação baseada em sockets TCP/IP e concorrência com goroutines. A arquitetura cliente-servidor foi estruturada para garantir escalabilidade, paralelismo e integridade na troca de mensagens entre veículos, pontos de recarga e o servidor central.  
+
+Com o uso de mutexes e channels, foi possível garantir o controle adequado de concorrência, especialmente no gerenciamento das filas de recarga dos pontos e acesso as estruturas de dados. O sistema também se beneficiou da persistência temporária de dados em memória, otimizando a resposta às requisições.  
+
+Além disso, a utilização do Docker e do Docker Compose tornou possível a simulação de múltiplos componentes operando simultaneamente em um ambiente isolado, facilitando os testes e validações da aplicação.  
+
+Como resultado, o sistema atendeu aos requisitos propostos, oferecendo uma solução eficiente e didática para o gerenciamento de recargas de veículos elétricos. A experiência proporcionou uma compreensão mais profunda sobre infraestrutura de comunicação em tempo real, concorrência segura, e práticas de desenvolvimento com conteinerização.  
 
 ## Desenvolvedoras
 <table>
